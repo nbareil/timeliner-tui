@@ -95,6 +95,10 @@ interpretation. F4 changes the timeframe interactively. Blank boundaries are
 unbounded; a date-only begin means midnight and a date-only end includes the
 entire day. Ambiguous or nonexistent local times are rejected.
 
+ENTER/F3 displays all four record timestamps in ISO 8601 format with the selected
+timezone's offset, for example `2026-09-16T12:34:56+00:00`. The original bodyfile
+line remains available below the formatted details.
+
 ```sh
 nix run path:. -- --after 2026-09-01 --before 2026-09-03 \
   --tz UTC timeline.body

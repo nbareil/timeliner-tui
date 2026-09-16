@@ -770,7 +770,8 @@ impl App {
             }
             KeyCode::Enter | KeyCode::F(3) => {
                 if let Some(row) = self.selected() {
-                    return vec![Action::Command(Command::Detail(row.key.record))];
+                    let timezone = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
+                    return vec![Action::Command(Command::Detail(row.key.record, timezone))];
                 }
             }
             KeyCode::F(1) => self.modal = Some(Modal::Text(HELP.into(), 0)),

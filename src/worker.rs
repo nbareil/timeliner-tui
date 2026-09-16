@@ -7,6 +7,8 @@ use crate::{
     store::Store,
 };
 use anyhow::Result;
+use chrono::TimeZone;
+use chrono_tz::Tz;
 use std::{
     path::PathBuf,
     sync::{
@@ -30,7 +32,7 @@ pub struct PageRequest {
 pub enum Command {
     Tag(i64, Option<Tag>),
     Save(Session),
-    Detail(i64),
+    Detail(i64, Tz),
     Diagnostics,
     Export(Export),
     Reload(PathBuf),
@@ -144,7 +146,7 @@ impl Workers {
                             tx.send(Message::Changed)?;
                             Ok(())
                         })(),
-                        Command::Detail(id) => {
+                        Command::Detail(id, timezone) => {
                             (|| -> Result<()> {
                                 let detail = store.detail(id)?;
                                 let labels = [
@@ -171,7 +173,21 @@ impl Workers {
                                     if detail.manual { "manual" } else { "automatic" },
                                     detail.matches
                                 );
-                                for (label, value) in labels.iter().zip(&detail.record.fields) {
+                                for (index, (label, value)) in
+                                    labels.iter().zip(&detail.record.fields).enumerate()
+                                {
+                                    let value = if index >= 7 {
+                                        let epoch = detail.record.times[index - 7];
+                                        timezone
+                                            .timestamp_opt(epoch, 0)
+                                            .single()
+                                            .map(|date| date.to_rfc3339())
+                                            .unwrap_or_else(|| {
+                                                format!("{epoch} (outside supported date range)")
+                                            })
+                                    } else {
+                                        value.clone()
+                                    };
                                     text.push_str(&format!("{label}: {value}\n"));
                                 }
                                 let rules = store.rules()?;

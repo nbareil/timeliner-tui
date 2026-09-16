@@ -60,11 +60,17 @@ fn tab_tags_record_and_enter_requests_details() {
         [Action::Command(Command::Tag(0, Some(Tag::Suspicious)))]
     ));
     assert_eq!(app.rows[0].tag, Tag::Suspicious);
-    let actions = key(&mut app, KeyCode::Enter);
-    assert!(matches!(
-        actions.as_slice(),
-        [Action::Command(Command::Detail(0))]
-    ));
+    app.session.timezone = "America/New_York".into();
+    for code in [KeyCode::Enter, KeyCode::F(3)] {
+        let actions = key(&mut app, code);
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::Command(Command::Detail(
+                0,
+                chrono_tz::America::New_York
+            ))]
+        ));
+    }
 }
 #[test]
 fn fork_copies_filters_but_smart_tab_is_global() {
