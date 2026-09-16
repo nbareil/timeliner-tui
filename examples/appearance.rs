@@ -215,6 +215,7 @@ fn main() {
                 "fg": rgb(cell.fg),
                 "bg": rgb(cell.bg),
                 "bold": cell.modifier.contains(Modifier::BOLD),
+                "dim": cell.modifier.contains(Modifier::DIM),
             })
         })
         .collect::<Vec<_>>();

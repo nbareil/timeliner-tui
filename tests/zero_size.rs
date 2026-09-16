@@ -104,7 +104,7 @@ fn older_indexes_read_missing_size_metadata_without_mistaking_unknown_for_zero()
 }
 
 #[test]
-fn zero_byte_badges_remain_visible_with_tags_selection_and_clipped_directories() {
+fn zero_byte_paths_are_faint_and_regular_weight_with_tags_and_selection() {
     let (_dir, store) = fixture();
     for theme in [Theme::Light, Theme::Dark] {
         for width in [60, 100, 144] {
@@ -128,7 +128,10 @@ fn zero_byte_badges_remain_visible_with_tags_selection_and_clipped_directories()
                     .map(|x| buffer[(x, row)].symbol())
                     .collect::<String>()
             };
-            for (row, badge) in [
+            let path_column = (0..width)
+                .find(|&x| buffer[(x, 5)].symbol() == "/")
+                .unwrap();
+            for (row, empty) in [
                 (5, true),
                 (6, false),
                 (7, true),
@@ -136,18 +139,33 @@ fn zero_byte_badges_remain_visible_with_tags_selection_and_clipped_directories()
                 (9, true),
                 (10, false),
             ] {
-                assert_eq!(text(row).contains("[0 B]"), badge, "{}", text(row));
+                assert!(!text(row).contains("[0 B]"), "{}", text(row));
+                let path_cell = &buffer[(path_column, row)];
+                assert_eq!(path_cell.modifier.contains(Modifier::DIM), empty);
+                assert!(!path_cell.modifier.contains(Modifier::BOLD));
+                assert!(matches!(path_cell.symbol(), "/" | "C"));
+                // Faint styling is restricted to the pathname.
+                assert!(!buffer[(3, row)].modifier.contains(Modifier::DIM));
             }
             assert!(text(5).contains('✓'));
             assert!(text(5).contains("IOC"));
             assert!(text(8).contains("…/"));
             assert!(text(8).contains("SUSPICIOUS"));
-            let badge = (0..width)
-                .find(|&x| buffer[(x, 5)].symbol() == "[")
+            assert_eq!(buffer[(path_column, 5)].fg, theme.palette().amber);
+            let basename = &buffer[(path_column + 5, 5)];
+            assert!(basename.modifier.contains(Modifier::DIM));
+            assert!(!basename.modifier.contains(Modifier::BOLD));
+            let clipped_separator = (0..width)
+                .rfind(|&x| buffer[(x, 8)].symbol() == "/")
                 .unwrap();
-            assert_eq!(buffer[(badge, 5)].fg, theme.palette().teal);
-            assert!(buffer[(badge, 5)].modifier.contains(Modifier::BOLD));
-            assert_eq!(buffer[(badge + 6, 5)].fg, theme.palette().amber);
+            assert!(
+                buffer[(clipped_separator, 8)]
+                    .modifier
+                    .contains(Modifier::DIM)
+            );
+            let tag = &buffer[(width - 1, 5)];
+            assert!(tag.modifier.contains(Modifier::BOLD));
+            assert!(!tag.modifier.contains(Modifier::DIM));
             assert_eq!(app.rows[0].event().unwrap().path, "/tmp/zero");
             let actions = app.key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
             assert!(

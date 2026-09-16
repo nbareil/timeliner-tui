@@ -385,16 +385,7 @@ impl App {
                 })
                 .collect::<Vec<_>>();
             frame.render_widget(Paragraph::new(Line::from(flags)).style(base), cells[3]);
-            let mut path_area = cells[4];
-            if row.zero_size {
-                let width = path_area.width.min(6);
-                frame.render_widget(
-                    Paragraph::new("[0 B]").style(base.fg(p.teal).add_modifier(Modifier::BOLD)),
-                    Rect::new(path_area.x, path_area.y, width, 1),
-                );
-                path_area.x += width;
-                path_area.width -= width;
-            }
+            let path_area = cells[4];
             let path = display_text(&display_path(&row.path, row.is_directory));
             let basename_path = if row.is_directory {
                 path.trim_end_matches(['/', '\\'])
@@ -403,7 +394,9 @@ impl App {
             };
             let split = basename_path.rfind(['/', '\\']).map_or(0, |i| i + 1);
             let path_color = if row.ioc_match { p.amber } else { p.text };
-            let path_style = if selected {
+            let path_style = if row.zero_size {
+                Style::default().fg(path_color).add_modifier(Modifier::DIM)
+            } else if selected {
                 Style::default().fg(path_color).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(path_color)
@@ -416,7 +409,11 @@ impl App {
                     ),
                     Span::styled(path[split..].to_string(), path_style),
                 ]))
-                .style(base),
+                .style(if row.zero_size {
+                    base.add_modifier(Modifier::DIM)
+                } else {
+                    base
+                }),
                 path_area,
             );
             if row.is_directory

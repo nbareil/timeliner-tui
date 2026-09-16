@@ -1,0 +1,703 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1464" height="744" viewBox="0 0 1464 744">
+<title>Zero-byte entries use faint, regular-weight path text</title>
+<desc>Synthetic terminal cell capture. Zero-byte paths are faint; IOC paths retain an amber tint.</desc>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<g font-family="DejaVu Sans Mono, monospace" font-size="16" xml:space="preserve">
+<rect x="12" y="12" width="40" height="20" fill="#ffffff"/>
+<text x="12" y="27" fill="#315fce" fill-opacity="1" font-weight="400">  ◆ </text>
+<rect x="52" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="52" y="27" fill="#315fce" fill-opacity="1" font-weight="700">T</text>
+<rect x="62" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="62" y="27" fill="#395bcb" fill-opacity="1" font-weight="700">I</text>
+<rect x="72" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="72" y="27" fill="#4257c9" fill-opacity="1" font-weight="700">M</text>
+<rect x="82" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="82" y="27" fill="#4b54c7" fill-opacity="1" font-weight="700">E</text>
+<rect x="92" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="92" y="27" fill="#5450c5" fill-opacity="1" font-weight="700">L</text>
+<rect x="102" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="102" y="27" fill="#5c4cc3" fill-opacity="1" font-weight="700">I</text>
+<rect x="112" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="112" y="27" fill="#6549c1" fill-opacity="1" font-weight="700">N</text>
+<rect x="122" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="122" y="27" fill="#6e45bf" fill-opacity="1" font-weight="700">E</text>
+<rect x="132" y="12" width="10" height="20" fill="#ffffff"/>
+<text x="132" y="27" fill="#7742bd" fill-opacity="1" font-weight="700">R</text>
+<rect x="142" y="12" width="170" height="20" fill="#ffffff"/>
+<text x="142" y="27" fill="#25344d" fill-opacity="1" font-weight="400">        Tab 1/4  </text>
+<rect x="312" y="12" width="250" height="20" fill="#ffffff"/>
+<text x="312" y="27" fill="#596b85" fill-opacity="1" font-weight="400">1–9 select · gt/gT switch</text>
+<rect x="562" y="12" width="590" height="20" fill="#ffffff"/>
+<rect x="1152" y="12" width="50" height="20" fill="#eaf0fa"/>
+<text x="1152" y="27" fill="#315fce" fill-opacity="1" font-weight="700"> F10 </text>
+<rect x="1202" y="12" width="100" height="20" fill="#ffffff"/>
+<text x="1202" y="27" fill="#087d7a" fill-opacity="1" font-weight="400"> Mouse on </text>
+<rect x="1302" y="12" width="30" height="20" fill="#ffffff"/>
+<rect x="1332" y="12" width="50" height="20" fill="#eaf0fa"/>
+<text x="1332" y="27" fill="#315fce" fill-opacity="1" font-weight="700"> F11 </text>
+<rect x="1382" y="12" width="70" height="20" fill="#ffffff"/>
+<text x="1382" y="27" fill="#596b85" fill-opacity="1" font-weight="400"> Light </text>
+<rect x="12" y="32" width="20" height="20" fill="#ffffff"/>
+<rect x="32" y="32" width="10" height="20" fill="#ffffff"/>
+<rect x="42" y="32" width="160" height="20" fill="#e3edff"/>
+<text x="42" y="47" fill="#315fce" fill-opacity="1" font-weight="700">● 1 All activity</text>
+<rect x="202" y="32" width="1230" height="20" fill="#ffffff"/>
+<text x="202" y="47" fill="#596b85" fill-opacity="1" font-weight="400">   2 IOC review   3 Authentication   4 Tagged                                                                              </text>
+<rect x="1432" y="32" width="20" height="20" fill="#ffffff"/>
+<rect x="12" y="52" width="80" height="20" fill="#f4f7fc"/>
+<text x="12" y="67" fill="#71839c" fill-opacity="1" font-weight="400">  TIME  </text>
+<rect x="92" y="52" width="190" height="20" fill="#f4f7fc"/>
+<text x="92" y="67" fill="#25344d" fill-opacity="1" font-weight="400">2026-09-08 08:10:00</text>
+<rect x="282" y="52" width="50" height="20" fill="#f4f7fc"/>
+<text x="282" y="67" fill="#315fce" fill-opacity="1" font-weight="400">  →  </text>
+<rect x="332" y="52" width="190" height="20" fill="#f4f7fc"/>
+<text x="332" y="67" fill="#25344d" fill-opacity="1" font-weight="400">2026-09-09 09:10:00</text>
+<rect x="522" y="52" width="90" height="20" fill="#f4f7fc"/>
+<text x="522" y="67" fill="#087d7a" fill-opacity="1" font-weight="400">   UTC   </text>
+<rect x="612" y="52" width="70" height="20" fill="#f4f7fc"/>
+<text x="612" y="67" fill="#596b85" fill-opacity="1" font-weight="400">macb   </text>
+<rect x="682" y="52" width="70" height="20" fill="#f4f7fc"/>
+<text x="682" y="67" fill="#71839c" fill-opacity="1" font-weight="400">F4 edit</text>
+<rect x="752" y="52" width="700" height="20" fill="#f4f7fc"/>
+<rect x="12" y="72" width="80" height="20" fill="#f4f7fc"/>
+<text x="12" y="87" fill="#71839c" fill-opacity="1" font-weight="400">  FIND  </text>
+<rect x="92" y="72" width="90" height="20" fill="#f4f7fc"/>
+<text x="92" y="87" fill="#25344d" fill-opacity="1" font-weight="400">All paths</text>
+<rect x="182" y="72" width="70" height="20" fill="#f4f7fc"/>
+<text x="182" y="87" fill="#c8d4e8" fill-opacity="1" font-weight="400">   ·   </text>
+<rect x="252" y="72" width="90" height="20" fill="#f4f7fc"/>
+<text x="252" y="87" fill="#087d7a" fill-opacity="1" font-weight="400">All hosts</text>
+<rect x="342" y="72" width="70" height="20" fill="#f4f7fc"/>
+<text x="342" y="87" fill="#c8d4e8" fill-opacity="1" font-weight="400">   ·   </text>
+<rect x="412" y="72" width="120" height="20" fill="#f4f7fc"/>
+<text x="412" y="87" fill="#596b85" fill-opacity="1" font-weight="400">0 exclusions</text>
+<rect x="532" y="72" width="100" height="20" fill="#f4f7fc"/>
+<text x="532" y="87" fill="#71839c" fill-opacity="1" font-weight="400">   F5 edit</text>
+<rect x="632" y="72" width="820" height="20" fill="#f4f7fc"/>
+<rect x="12" y="92" width="20" height="20" fill="#eaf0fa"/>
+<rect x="32" y="92" width="10" height="20" fill="#eaf0fa"/>
+<rect x="42" y="92" width="190" height="20" fill="#eaf0fa"/>
+<text x="42" y="107" fill="#596b85" fill-opacity="1" font-weight="400">TIMESTAMP          </text>
+<rect x="232" y="92" width="10" height="20" fill="#eaf0fa"/>
+<rect x="242" y="92" width="260" height="20" fill="#eaf0fa"/>
+<text x="242" y="107" fill="#596b85" fill-opacity="1" font-weight="400">HOST                      </text>
+<rect x="502" y="92" width="10" height="20" fill="#eaf0fa"/>
+<rect x="512" y="92" width="40" height="20" fill="#eaf0fa"/>
+<text x="512" y="107" fill="#596b85" fill-opacity="1" font-weight="400">MACB</text>
+<rect x="552" y="92" width="10" height="20" fill="#eaf0fa"/>
+<rect x="562" y="92" width="780" height="20" fill="#eaf0fa"/>
+<text x="562" y="107" fill="#596b85" fill-opacity="1" font-weight="400">PATH                                                                          </text>
+<rect x="1342" y="92" width="10" height="20" fill="#eaf0fa"/>
+<rect x="1352" y="92" width="100" height="20" fill="#eaf0fa"/>
+<text x="1352" y="107" fill="#596b85" fill-opacity="1" font-weight="400">ASSESSMENT</text>
+<rect x="12" y="112" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="112" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="127" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:10:00</text>
+<rect x="232" y="112" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="112" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="127" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="112" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="112" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="127" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="112" width="30" height="20" fill="#ffffff"/>
+<text x="522" y="127" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="112" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="112" width="90" height="20" fill="#ffffff"/>
+<text x="562" y="127" fill="#596b85" fill-opacity="0.6" font-weight="400">/var/log/</text>
+<rect x="652" y="112" width="690" height="20" fill="#ffffff"/>
+<text x="652" y="127" fill="#25344d" fill-opacity="0.6" font-weight="400">empty.log                                                            </text>
+<rect x="1342" y="112" width="110" height="20" fill="#ffffff"/>
+<rect x="12" y="132" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="132" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="147" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:10:37</text>
+<rect x="232" y="132" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="132" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="147" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="132" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="132" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="147" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="132" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="147" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="132" width="20" height="20" fill="#f8faff"/>
+<text x="532" y="147" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="132" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="132" width="90" height="20" fill="#f8faff"/>
+<text x="562" y="147" fill="#596b85" fill-opacity="1" font-weight="400">/var/log/</text>
+<rect x="652" y="132" width="800" height="20" fill="#f8faff"/>
+<text x="652" y="147" fill="#25344d" fill-opacity="1" font-weight="400">auth.log                                                                        </text>
+<rect x="12" y="152" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="152" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="167" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:11:14</text>
+<rect x="232" y="152" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="152" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="167" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="152" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="152" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="167" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="152" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="167" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="152" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="167" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="152" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="167" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="152" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="152" width="80" height="20" fill="#ffffff"/>
+<text x="562" y="167" fill="#596b85" fill-opacity="0.6" font-weight="400">C:\Temp\</text>
+<rect x="642" y="152" width="700" height="20" fill="#ffffff"/>
+<text x="642" y="167" fill="#25344d" fill-opacity="0.6" font-weight="400">empty.txt                                                             </text>
+<rect x="1342" y="152" width="110" height="20" fill="#ffffff"/>
+<rect x="12" y="172" width="20" height="20" fill="#f8faff"/>
+<text x="12" y="187" fill="#315fce" fill-opacity="1" font-weight="400">● </text>
+<rect x="32" y="172" width="10" height="20" fill="#f8faff"/>
+<rect x="42" y="172" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="187" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:11:51</text>
+<rect x="232" y="172" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="172" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="187" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="172" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="172" width="20" height="20" fill="#f8faff"/>
+<text x="512" y="187" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="532" y="172" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="187" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="172" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="187" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="172" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="172" width="50" height="20" fill="#f8faff"/>
+<text x="562" y="187" fill="#596b85" fill-opacity="0.6" font-weight="400">/tmp/</text>
+<rect x="612" y="172" width="730" height="20" fill="#f8faff"/>
+<text x="612" y="187" fill="#25344d" fill-opacity="0.6" font-weight="400">empty.sh                                                                 </text>
+<rect x="1342" y="172" width="10" height="20" fill="#f8faff"/>
+<rect x="1352" y="172" width="100" height="20" fill="#ffefd3"/>
+<text x="1352" y="187" fill="#92570c" fill-opacity="1" font-weight="700">SUSPICIOUS</text>
+<rect x="12" y="192" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="192" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="207" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:12:28</text>
+<rect x="232" y="192" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="192" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="207" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="192" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="192" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="207" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="192" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="207" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="192" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="207" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="192" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="207" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="192" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="192" width="60" height="20" fill="#ffffff"/>
+<text x="562" y="207" fill="#596b85" fill-opacity="0.6" font-weight="400">/proc/</text>
+<rect x="622" y="192" width="720" height="20" fill="#ffffff"/>
+<text x="622" y="207" fill="#25344d" fill-opacity="0.6" font-weight="400">zero-size-directory/                                                    </text>
+<rect x="1342" y="192" width="110" height="20" fill="#ffffff"/>
+<rect x="12" y="212" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="212" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="227" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:13:05</text>
+<rect x="232" y="212" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="212" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="227" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="212" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="212" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="227" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="212" width="30" height="20" fill="#f8faff"/>
+<text x="522" y="227" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="212" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="212" width="340" height="20" fill="#f8faff"/>
+<text x="562" y="227" fill="#92570c" fill-opacity="1" font-weight="400">/etc/systemd/system/backup.service</text>
+<rect x="902" y="212" width="450" height="20" fill="#f8faff"/>
+<rect x="1352" y="212" width="100" height="20" fill="#eee4ff"/>
+<text x="1352" y="227" fill="#7742bd" fill-opacity="1" font-weight="700">       IOC</text>
+<rect x="12" y="232" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="232" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="247" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:13:42</text>
+<rect x="232" y="232" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="232" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="247" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="232" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="232" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="247" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="232" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="247" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="232" width="20" height="20" fill="#ffffff"/>
+<text x="532" y="247" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="232" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="232" width="250" height="20" fill="#ffffff"/>
+<text x="562" y="247" fill="#596b85" fill-opacity="1" font-weight="400">/var/spool/cron/crontabs/</text>
+<rect x="812" y="232" width="640" height="20" fill="#ffffff"/>
+<text x="812" y="247" fill="#25344d" fill-opacity="1" font-weight="400">root                                                            </text>
+<rect x="12" y="252" width="20" height="20" fill="#e3edff"/>
+<text x="12" y="267" fill="#315fce" fill-opacity="1" font-weight="400">● </text>
+<rect x="32" y="252" width="10" height="20" fill="#e3edff"/>
+<rect x="42" y="252" width="190" height="20" fill="#e3edff"/>
+<text x="42" y="267" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:14:19</text>
+<rect x="232" y="252" width="10" height="20" fill="#e3edff"/>
+<rect x="242" y="252" width="260" height="20" fill="#e3edff"/>
+<text x="242" y="267" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="252" width="10" height="20" fill="#e3edff"/>
+<rect x="512" y="252" width="10" height="20" fill="#e3edff"/>
+<text x="512" y="267" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="252" width="10" height="20" fill="#e3edff"/>
+<text x="522" y="267" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="252" width="10" height="20" fill="#e3edff"/>
+<text x="532" y="267" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="252" width="10" height="20" fill="#e3edff"/>
+<text x="542" y="267" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="252" width="10" height="20" fill="#e3edff"/>
+<rect x="562" y="252" width="780" height="20" fill="#e3edff"/>
+<text x="562" y="267" fill="#92570c" fill-opacity="0.6" font-weight="400">/var/lib/application/a-very-long-directory-name/with-more-components/than-fi…/</text>
+<rect x="1342" y="252" width="10" height="20" fill="#e3edff"/>
+<rect x="1352" y="252" width="100" height="20" fill="#ffe2ec"/>
+<text x="1352" y="267" fill="#b6335c" fill-opacity="1" font-weight="700"> MALICIOUS</text>
+<rect x="12" y="272" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="272" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="287" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:14:56</text>
+<rect x="232" y="272" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="272" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="287" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="272" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="272" width="20" height="20" fill="#ffffff"/>
+<text x="512" y="287" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="532" y="272" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="287" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="272" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="287" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="272" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="272" width="150" height="20" fill="#ffffff"/>
+<text x="562" y="287" fill="#596b85" fill-opacity="1" font-weight="400">/usr/local/bin/</text>
+<rect x="712" y="272" width="740" height="20" fill="#ffffff"/>
+<text x="712" y="287" fill="#25344d" fill-opacity="1" font-weight="400">healthcheck                                                               </text>
+<rect x="12" y="292" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="292" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="307" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:15:33</text>
+<rect x="232" y="292" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="292" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="307" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="292" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="292" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="307" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="292" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="307" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="292" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="307" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="292" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="307" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="292" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="292" width="150" height="20" fill="#f8faff"/>
+<text x="562" y="307" fill="#596b85" fill-opacity="1" font-weight="400">/var/log/audit/</text>
+<rect x="712" y="292" width="740" height="20" fill="#f8faff"/>
+<text x="712" y="307" fill="#25344d" fill-opacity="1" font-weight="400">audit.log                                                                 </text>
+<rect x="12" y="312" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="312" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="327" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:16:10</text>
+<rect x="232" y="312" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="312" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="327" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="312" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="312" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="327" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="312" width="30" height="20" fill="#ffffff"/>
+<text x="522" y="327" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="312" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="312" width="50" height="20" fill="#ffffff"/>
+<text x="562" y="327" fill="#596b85" fill-opacity="1" font-weight="400">/etc/</text>
+<rect x="612" y="312" width="840" height="20" fill="#ffffff"/>
+<text x="612" y="327" fill="#25344d" fill-opacity="1" font-weight="400">passwd                                                                              </text>
+<rect x="12" y="332" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="332" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="347" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:16:47</text>
+<rect x="232" y="332" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="332" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="347" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="332" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="332" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="347" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="332" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="347" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="332" width="20" height="20" fill="#f8faff"/>
+<text x="532" y="347" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="332" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="332" width="150" height="20" fill="#f8faff"/>
+<text x="562" y="347" fill="#596b85" fill-opacity="1" font-weight="400">/etc/sudoers.d/</text>
+<rect x="712" y="332" width="740" height="20" fill="#f8faff"/>
+<text x="712" y="347" fill="#25344d" fill-opacity="1" font-weight="400">deploy                                                                    </text>
+<rect x="12" y="352" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="352" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="367" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:17:24</text>
+<rect x="232" y="352" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="352" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="367" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="352" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="352" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="367" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="352" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="367" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="352" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="367" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="352" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="367" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="352" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="352" width="240" height="20" fill="#ffffff"/>
+<text x="562" y="367" fill="#596b85" fill-opacity="1" font-weight="400">/opt/application/config/</text>
+<rect x="802" y="352" width="650" height="20" fill="#ffffff"/>
+<text x="802" y="367" fill="#25344d" fill-opacity="1" font-weight="400">production.yaml                                                  </text>
+<rect x="12" y="372" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="372" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="387" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:18:01</text>
+<rect x="232" y="372" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="372" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="387" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="372" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="372" width="20" height="20" fill="#f8faff"/>
+<text x="512" y="387" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="532" y="372" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="387" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="372" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="387" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="372" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="372" width="250" height="20" fill="#f8faff"/>
+<text x="562" y="387" fill="#596b85" fill-opacity="1" font-weight="400">/var/lib/postgresql/data/</text>
+<rect x="812" y="372" width="640" height="20" fill="#f8faff"/>
+<text x="812" y="387" fill="#25344d" fill-opacity="1" font-weight="400">pg_hba.conf                                                     </text>
+<rect x="12" y="392" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="392" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="407" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:18:38</text>
+<rect x="232" y="392" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="392" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="407" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="392" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="392" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="407" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="392" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="407" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="392" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="407" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="392" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="407" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="392" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="392" width="130" height="20" fill="#ffffff"/>
+<text x="562" y="407" fill="#596b85" fill-opacity="1" font-weight="400">/home/deploy/</text>
+<rect x="692" y="392" width="660" height="20" fill="#ffffff"/>
+<text x="692" y="407" fill="#25344d" fill-opacity="1" font-weight="400">.bash_history                                                     </text>
+<rect x="1352" y="392" width="100" height="20" fill="#ffefd3"/>
+<text x="1352" y="407" fill="#92570c" fill-opacity="1" font-weight="700">SUSPICIOUS</text>
+<rect x="12" y="412" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="412" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="427" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:19:15</text>
+<rect x="232" y="412" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="412" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="427" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="412" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="412" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="427" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="412" width="30" height="20" fill="#f8faff"/>
+<text x="522" y="427" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="412" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="412" width="290" height="20" fill="#f8faff"/>
+<text x="562" y="427" fill="#92570c" fill-opacity="1" font-weight="400">/etc/cron.d/daily-maintenance</text>
+<rect x="852" y="412" width="500" height="20" fill="#f8faff"/>
+<rect x="1352" y="412" width="100" height="20" fill="#eee4ff"/>
+<text x="1352" y="427" fill="#7742bd" fill-opacity="1" font-weight="700">       IOC</text>
+<rect x="12" y="432" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="432" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="447" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:19:52</text>
+<rect x="232" y="432" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="432" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="447" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="432" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="432" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="447" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="432" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="447" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="432" width="20" height="20" fill="#ffffff"/>
+<text x="532" y="447" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="432" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="432" width="150" height="20" fill="#ffffff"/>
+<text x="562" y="447" fill="#596b85" fill-opacity="1" font-weight="400">/run/user/1000/</text>
+<rect x="712" y="432" width="740" height="20" fill="#ffffff"/>
+<text x="712" y="447" fill="#25344d" fill-opacity="1" font-weight="400">session.lock                                                              </text>
+<rect x="12" y="452" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="452" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="467" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:20:29</text>
+<rect x="232" y="452" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="452" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="467" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="452" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="452" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="467" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="452" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="467" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="452" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="467" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="452" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="467" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="452" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="452" width="170" height="20" fill="#f8faff"/>
+<text x="562" y="467" fill="#596b85" fill-opacity="1" font-weight="400">/var/log/journal/</text>
+<rect x="732" y="452" width="720" height="20" fill="#f8faff"/>
+<text x="732" y="467" fill="#25344d" fill-opacity="1" font-weight="400">system.journal                                                          </text>
+<rect x="12" y="472" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="472" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="487" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:21:06</text>
+<rect x="232" y="472" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="472" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="487" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="472" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="472" width="20" height="20" fill="#ffffff"/>
+<text x="512" y="487" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="532" y="472" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="487" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="472" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="487" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="472" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="472" width="50" height="20" fill="#ffffff"/>
+<text x="562" y="487" fill="#596b85" fill-opacity="1" font-weight="400">/etc/</text>
+<rect x="612" y="472" width="840" height="20" fill="#ffffff"/>
+<text x="612" y="487" fill="#25344d" fill-opacity="1" font-weight="400">resolv.conf                                                                         </text>
+<rect x="12" y="492" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="492" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="507" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:21:43</text>
+<rect x="232" y="492" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="492" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="507" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="492" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="492" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="507" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="492" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="507" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="492" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="507" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="492" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="507" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="492" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="492" width="240" height="20" fill="#f8faff"/>
+<text x="562" y="507" fill="#596b85" fill-opacity="1" font-weight="400">/usr/lib/systemd/system/</text>
+<rect x="802" y="492" width="650" height="20" fill="#f8faff"/>
+<text x="802" y="507" fill="#25344d" fill-opacity="1" font-weight="400">ssh.service                                                      </text>
+<rect x="12" y="512" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="512" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="527" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:22:20</text>
+<rect x="232" y="512" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="512" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="527" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="512" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="512" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="527" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="512" width="30" height="20" fill="#ffffff"/>
+<text x="522" y="527" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="512" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="512" width="140" height="20" fill="#ffffff"/>
+<text x="562" y="527" fill="#596b85" fill-opacity="1" font-weight="400">/var/www/html/</text>
+<rect x="702" y="512" width="750" height="20" fill="#ffffff"/>
+<text x="702" y="527" fill="#25344d" fill-opacity="1" font-weight="400">index.html                                                                 </text>
+<rect x="12" y="532" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="532" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="547" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:22:57</text>
+<rect x="232" y="532" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="532" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="547" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="532" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="532" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="547" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="532" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="547" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="532" width="20" height="20" fill="#f8faff"/>
+<text x="532" y="547" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="532" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="532" width="220" height="20" fill="#f8faff"/>
+<text x="562" y="547" fill="#596b85" fill-opacity="1" font-weight="400">/opt/application/logs/</text>
+<rect x="782" y="532" width="670" height="20" fill="#f8faff"/>
+<text x="782" y="547" fill="#25344d" fill-opacity="1" font-weight="400">worker.log                                                         </text>
+<rect x="12" y="552" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="552" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="567" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:23:34</text>
+<rect x="232" y="552" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="552" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="567" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="552" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="552" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="567" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="552" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="567" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="552" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="567" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="552" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="567" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="552" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="552" width="90" height="20" fill="#ffffff"/>
+<text x="562" y="567" fill="#596b85" fill-opacity="1" font-weight="400">/usr/bin/</text>
+<rect x="652" y="552" width="800" height="20" fill="#ffffff"/>
+<text x="652" y="567" fill="#25344d" fill-opacity="1" font-weight="400">curl                                                                            </text>
+<rect x="12" y="572" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="572" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="587" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:24:11</text>
+<rect x="232" y="572" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="572" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="587" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="572" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="572" width="20" height="20" fill="#f8faff"/>
+<text x="512" y="587" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="532" y="572" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="587" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="572" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="587" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="572" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="572" width="150" height="20" fill="#f8faff"/>
+<text x="562" y="587" fill="#596b85" fill-opacity="1" font-weight="400">/etc/ssl/certs/</text>
+<rect x="712" y="572" width="740" height="20" fill="#f8faff"/>
+<text x="712" y="587" fill="#25344d" fill-opacity="1" font-weight="400">ca-certificates.crt                                                       </text>
+<rect x="12" y="592" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="592" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="607" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:24:48</text>
+<rect x="232" y="592" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="592" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="607" fill="#7742bd" fill-opacity="1" font-weight="400">web-01                    </text>
+<rect x="502" y="592" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="592" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="607" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="592" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="607" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="592" width="10" height="20" fill="#ffffff"/>
+<text x="532" y="607" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="592" width="10" height="20" fill="#ffffff"/>
+<text x="542" y="607" fill="#7742bd" fill-opacity="1" font-weight="400">b</text>
+<rect x="552" y="592" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="592" width="210" height="20" fill="#ffffff"/>
+<text x="562" y="607" fill="#596b85" fill-opacity="1" font-weight="400">/home/deploy/.config/</text>
+<rect x="772" y="592" width="680" height="20" fill="#ffffff"/>
+<text x="772" y="607" fill="#25344d" fill-opacity="1" font-weight="400">environment                                                         </text>
+<rect x="12" y="612" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="612" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="627" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:25:25</text>
+<rect x="232" y="612" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="612" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="627" fill="#087d7a" fill-opacity="1" font-weight="400">db-01                     </text>
+<rect x="502" y="612" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="612" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="627" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="612" width="30" height="20" fill="#f8faff"/>
+<text x="522" y="627" fill="#71839c" fill-opacity="1" font-weight="400">···</text>
+<rect x="552" y="612" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="612" width="90" height="20" fill="#f8faff"/>
+<text x="562" y="627" fill="#596b85" fill-opacity="1" font-weight="400">/var/log/</text>
+<rect x="652" y="612" width="800" height="20" fill="#f8faff"/>
+<text x="652" y="627" fill="#25344d" fill-opacity="1" font-weight="400">syslog                                                                          </text>
+<rect x="12" y="632" width="30" height="20" fill="#ffffff"/>
+<rect x="42" y="632" width="190" height="20" fill="#ffffff"/>
+<text x="42" y="647" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:26:02</text>
+<rect x="232" y="632" width="10" height="20" fill="#ffffff"/>
+<rect x="242" y="632" width="260" height="20" fill="#ffffff"/>
+<text x="242" y="647" fill="#7742bd" fill-opacity="1" font-weight="400">edge-02                   </text>
+<rect x="502" y="632" width="10" height="20" fill="#ffffff"/>
+<rect x="512" y="632" width="10" height="20" fill="#ffffff"/>
+<text x="512" y="647" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="522" y="632" width="10" height="20" fill="#ffffff"/>
+<text x="522" y="647" fill="#087d7a" fill-opacity="1" font-weight="400">a</text>
+<rect x="532" y="632" width="20" height="20" fill="#ffffff"/>
+<text x="532" y="647" fill="#71839c" fill-opacity="1" font-weight="400">··</text>
+<rect x="552" y="632" width="10" height="20" fill="#ffffff"/>
+<rect x="562" y="632" width="260" height="20" fill="#ffffff"/>
+<text x="562" y="647" fill="#596b85" fill-opacity="1" font-weight="400">/opt/application/releases/</text>
+<rect x="822" y="632" width="630" height="20" fill="#ffffff"/>
+<text x="822" y="647" fill="#25344d" fill-opacity="1" font-weight="400">current                                                        </text>
+<rect x="12" y="652" width="30" height="20" fill="#f8faff"/>
+<rect x="42" y="652" width="190" height="20" fill="#f8faff"/>
+<text x="42" y="667" fill="#596b85" fill-opacity="1" font-weight="400">2026-09-08 09:26:39</text>
+<rect x="232" y="652" width="10" height="20" fill="#f8faff"/>
+<rect x="242" y="652" width="260" height="20" fill="#f8faff"/>
+<text x="242" y="667" fill="#087d7a" fill-opacity="1" font-weight="400">app-04                    </text>
+<rect x="502" y="652" width="10" height="20" fill="#f8faff"/>
+<rect x="512" y="652" width="10" height="20" fill="#f8faff"/>
+<text x="512" y="667" fill="#315fce" fill-opacity="1" font-weight="400">m</text>
+<rect x="522" y="652" width="10" height="20" fill="#f8faff"/>
+<text x="522" y="667" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="532" y="652" width="10" height="20" fill="#f8faff"/>
+<text x="532" y="667" fill="#92570c" fill-opacity="1" font-weight="400">c</text>
+<rect x="542" y="652" width="10" height="20" fill="#f8faff"/>
+<text x="542" y="667" fill="#71839c" fill-opacity="1" font-weight="400">·</text>
+<rect x="552" y="652" width="10" height="20" fill="#f8faff"/>
+<rect x="562" y="652" width="50" height="20" fill="#f8faff"/>
+<text x="562" y="667" fill="#596b85" fill-opacity="1" font-weight="400">/etc/</text>
+<rect x="612" y="652" width="840" height="20" fill="#f8faff"/>
+<text x="612" y="667" fill="#25344d" fill-opacity="1" font-weight="400">hosts                                                                               </text>
+<rect x="12" y="672" width="40" height="20" fill="#f4f7fc"/>
+<text x="12" y="687" fill="#087d7a" fill-opacity="1" font-weight="400">  ● </text>
+<rect x="52" y="672" width="290" height="20" fill="#f4f7fc"/>
+<text x="52" y="687" fill="#596b85" fill-opacity="1" font-weight="400">Ready · 4 collections indexed</text>
+<rect x="342" y="672" width="1110" height="20" fill="#f4f7fc"/>
+<rect x="12" y="692" width="50" height="20" fill="#f4f7fc"/>
+<text x="12" y="707" fill="#315fce" fill-opacity="1" font-weight="400">  ↑↓ </text>
+<rect x="62" y="692" width="90" height="20" fill="#f4f7fc"/>
+<text x="62" y="707" fill="#596b85" fill-opacity="1" font-weight="400">scroll   </text>
+<rect x="152" y="692" width="40" height="20" fill="#f4f7fc"/>
+<text x="152" y="707" fill="#315fce" fill-opacity="1" font-weight="400">j/k </text>
+<rect x="192" y="692" width="90" height="20" fill="#f4f7fc"/>
+<text x="192" y="707" fill="#596b85" fill-opacity="1" font-weight="400">select   </text>
+<rect x="282" y="692" width="60" height="20" fill="#f4f7fc"/>
+<text x="282" y="707" fill="#315fce" fill-opacity="1" font-weight="400">SPACE </text>
+<rect x="342" y="692" width="90" height="20" fill="#f4f7fc"/>
+<text x="342" y="707" fill="#596b85" fill-opacity="1" font-weight="400">toggle   </text>
+<rect x="432" y="692" width="20" height="20" fill="#f4f7fc"/>
+<text x="432" y="707" fill="#315fce" fill-opacity="1" font-weight="400">g </text>
+<rect x="452" y="692" width="70" height="20" fill="#f4f7fc"/>
+<text x="452" y="707" fill="#596b85" fill-opacity="1" font-weight="400">goto   </text>
+<rect x="522" y="692" width="40" height="20" fill="#f4f7fc"/>
+<text x="522" y="707" fill="#7742bd" fill-opacity="1" font-weight="400">TAB </text>
+<rect x="562" y="692" width="60" height="20" fill="#f4f7fc"/>
+<text x="562" y="707" fill="#596b85" fill-opacity="1" font-weight="400">tag   </text>
+<rect x="622" y="692" width="60" height="20" fill="#f4f7fc"/>
+<text x="622" y="707" fill="#315fce" fill-opacity="1" font-weight="400">ENTER </text>
+<rect x="682" y="692" width="170" height="20" fill="#f4f7fc"/>
+<text x="682" y="707" fill="#596b85" fill-opacity="1" font-weight="400">inspect/expand   </text>
+<rect x="852" y="692" width="20" height="20" fill="#f4f7fc"/>
+<text x="852" y="707" fill="#315fce" fill-opacity="1" font-weight="400">c </text>
+<rect x="872" y="692" width="110" height="20" fill="#f4f7fc"/>
+<text x="872" y="707" fill="#596b85" fill-opacity="1" font-weight="400">collapse   </text>
+<rect x="982" y="692" width="20" height="20" fill="#f4f7fc"/>
+<text x="982" y="707" fill="#315fce" fill-opacity="1" font-weight="400">C </text>
+<rect x="1002" y="692" width="160" height="20" fill="#f4f7fc"/>
+<text x="1002" y="707" fill="#596b85" fill-opacity="1" font-weight="400">threshold   Esc </text>
+<rect x="1162" y="692" width="60" height="20" fill="#f4f7fc"/>
+<text x="1162" y="707" fill="#71839c" fill-opacity="1" font-weight="400">cancel</text>
+<rect x="1222" y="692" width="230" height="20" fill="#f4f7fc"/>
+<rect x="12" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="12" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F1 </text>
+<rect x="52" y="712" width="100" height="20" fill="#ffffff"/>
+<text x="52" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Help     </text>
+<rect x="152" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="152" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F2 </text>
+<rect x="192" y="712" width="110" height="20" fill="#ffffff"/>
+<text x="192" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Tags      </text>
+<rect x="302" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="302" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F3 </text>
+<rect x="342" y="712" width="100" height="20" fill="#ffffff"/>
+<text x="342" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Detail   </text>
+<rect x="442" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="442" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F4 </text>
+<rect x="482" y="712" width="110" height="20" fill="#ffffff"/>
+<text x="482" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Time      </text>
+<rect x="592" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="592" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F5 </text>
+<rect x="632" y="712" width="100" height="20" fill="#ffffff"/>
+<text x="632" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Filter   </text>
+<rect x="732" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="732" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F6 </text>
+<rect x="772" y="712" width="100" height="20" fill="#ffffff"/>
+<text x="772" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Fork     </text>
+<rect x="872" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="872" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F7 </text>
+<rect x="912" y="712" width="110" height="20" fill="#ffffff"/>
+<text x="912" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Views     </text>
+<rect x="1022" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="1022" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F8 </text>
+<rect x="1062" y="712" width="100" height="20" fill="#ffffff"/>
+<text x="1062" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Marks    </text>
+<rect x="1162" y="712" width="40" height="20" fill="#eaf0fa"/>
+<text x="1162" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> F9 </text>
+<rect x="1202" y="712" width="110" height="20" fill="#ffffff"/>
+<text x="1202" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Export    </text>
+<rect x="1312" y="712" width="30" height="20" fill="#eaf0fa"/>
+<text x="1312" y="727" fill="#315fce" fill-opacity="1" font-weight="700"> q </text>
+<rect x="1342" y="712" width="110" height="20" fill="#ffffff"/>
+<text x="1342" y="727" fill="#25344d" fill-opacity="1" font-weight="400"> Quit      </text>
+</g>
+</svg>

@@ -80,11 +80,11 @@ exports use the original pathname. Existing investigations read mode information
 from the original record when it is missing from the index.
 See the [directory-row terminal capture](docs/images/directories.txt).
 
-Entries whose bodyfile size field is zero show a teal `[0 B]` badge before the
-pathname, including directories. The badge remains visible when a long path is
-clipped. Existing investigations read missing size metadata from the original
-record. See the
-[zero-size terminal capture](docs/images/zero-size.txt).
+Entries whose bodyfile size field is zero use faint, regular-weight path text,
+including directories. IOC paths keep their amber tint, and selection uses the
+row background. Existing investigations read missing size metadata from the
+original record. See the [light](docs/images/zero-size-light.svg) and
+[dark](docs/images/zero-size-dark.svg) terminal previews.
 
 | Key | Action |
 | --- | --- |

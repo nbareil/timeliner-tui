@@ -3,14 +3,14 @@
   TIME  2026-09-08 08:10:00  →  2026-09-09 09:10:00   UTC   macb   F4 edit
   FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
    TIMESTAMP           HOST                       MACB PATH                                                                           ASSESSMENT
-   2026-09-08 09:10:00 web-01                     m··· [0 B] /var/log/empty.log
+   2026-09-08 09:10:00 web-01                     m··· /var/log/empty.log
    2026-09-08 09:10:37 db-01                      ·a·· /var/log/auth.log
-   2026-09-08 09:11:14 edge-02                    m·c· [0 B] C:\Temp\empty.txt
-●  2026-09-08 09:11:51 app-04                     ··cb [0 B] /tmp/empty.sh                                                            SUSPICIOUS
-   2026-09-08 09:12:28 web-01                     macb [0 B] /proc/zero-size-directory/
+   2026-09-08 09:11:14 edge-02                    m·c· C:\Temp\empty.txt
+●  2026-09-08 09:11:51 app-04                     ··cb /tmp/empty.sh                                                                  SUSPICIOUS
+   2026-09-08 09:12:28 web-01                     macb /proc/zero-size-directory/
    2026-09-08 09:13:05 db-01                      m··· /etc/systemd/system/backup.service                                                    IOC
    2026-09-08 09:13:42 edge-02                    ·a·· /var/spool/cron/crontabs/root
-●  2026-09-08 09:14:19 app-04                     m·c· [0 B] /var/lib/application/a-very-long-directory-name/with-more-components/t…/  MALICIOUS
+●  2026-09-08 09:14:19 app-04                     m·c· /var/lib/application/a-very-long-directory-name/with-more-components/than-fi…/  MALICIOUS
    2026-09-08 09:14:56 web-01                     ··cb /usr/local/bin/healthcheck
    2026-09-08 09:15:33 db-01                      macb /var/log/audit/audit.log
    2026-09-08 09:16:10 edge-02                    m··· /etc/passwd
