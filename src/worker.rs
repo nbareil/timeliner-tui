@@ -2,7 +2,8 @@ use crate::{
     burst,
     export::{self, Export},
     ioc::Rules,
-    model::{Burst, DisplayRow, EventKey, Session, Tag, TagChange, View},
+    model::{Burst, DisplayRow, EventKey, Row, Session, Tag, TagChange, View},
+    navigation::Jump,
     query::{self, Cancellation},
     source::Input,
     store::Store,
@@ -31,6 +32,7 @@ pub struct PageRequest {
     pub limit: usize,
     pub context_before: usize,
     pub detect_burst: Option<BurstRequest>,
+    pub jump: Option<Jump>,
 }
 
 #[derive(Clone)]
@@ -54,6 +56,7 @@ pub enum Message {
     Ready(Session, String),
     Page(u64, Vec<DisplayRow>),
     Burst(u64, Option<Burst>),
+    JumpTarget(u64, Option<Row>),
     Progress(u64, String),
     Tagged(TagChange),
     Changed,
@@ -310,6 +313,17 @@ impl Workers {
                 };
                 let result = (|| -> Result<Message> {
                     let store = Store::reader(&root)?;
+                    if let Some(jump) = request.jump {
+                        let target = jump.find(&store, &request.view, &cancel, |count| {
+                            if count.is_multiple_of(65536) {
+                                let _ = messages_tx.send(Message::Progress(
+                                    request.generation,
+                                    format!("Finding jump destination: {count} candidates checked"),
+                                ));
+                            }
+                        })?;
+                        return Ok(Message::JumpTarget(request.generation, target));
+                    }
                     if let Some(detection) = request.detect_burst {
                         let found = burst::detect(
                             &store,

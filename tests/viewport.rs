@@ -3,6 +3,7 @@ use ratatui::{Terminal, backend::TestBackend};
 use std::ops::Range;
 use timeliner_tui::{
     model::{DisplayRow, EventKey, Row, Session, Tag},
+    navigation::Jump,
     ui::{Action, App},
     worker::{Command, Message, PageRequest},
 };
@@ -513,5 +514,237 @@ fn z_shortcuts_render_the_same_event_at_the_requested_screen_row() {
     }
     if std::env::var_os("TIMELINER_CAPTURE_Z").is_some() {
         print!("{capture}");
+    }
+}
+
+fn time_jump(app: &mut App, suffix: char) -> PageRequest {
+    assert!(key(app, KeyCode::Char('n')).is_empty());
+    page(key(app, KeyCode::Char(suffix)))
+}
+
+fn time_target(app: &mut App, request: &PageRequest, id: i64) -> PageRequest {
+    page(app.message(Message::JumpTarget(
+        request.generation,
+        rows(id..id + 1).pop().unwrap().event().cloned(),
+    )))
+}
+
+#[test]
+fn time_shortcuts_start_from_the_selection_in_the_display_timezone() {
+    for (suffix, expected) in [
+        ('m', "2020-09-13T12:28:00Z"),
+        ('h', "2020-09-13T13:15:00Z"),
+        ('d', "2020-09-13T18:15:00Z"),
+        ('M', "2020-09-30T18:15:00Z"),
+        ('y', "2020-12-31T18:15:00Z"),
+    ] {
+        let mut app = loaded(0..128, 10);
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        app.session.timezone = "Asia/Kathmandu".into();
+        key(&mut app, KeyCode::Char('n'));
+        let request = page(app.key(KeyEvent::new(
+            KeyCode::Char(suffix),
+            if suffix == 'M' {
+                KeyModifiers::SHIFT
+            } else {
+                KeyModifiers::NONE
+            },
+        )));
+        assert_eq!(
+            request.jump,
+            Some(Jump::TimeBoundary(
+                chrono::DateTime::parse_from_rfc3339(expected)
+                    .unwrap()
+                    .timestamp()
+            ))
+        );
+        assert_eq!(app.top, 40);
+        assert_eq!(app.session.views[0].selected, 3);
+    }
+}
+
+#[test]
+fn time_jump_centers_the_actual_target_and_keeps_preceding_events_and_return_location() {
+    for height in [1, 10, 19, 20] {
+        let mut app = loaded(0..128, 10);
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        let request = time_jump(&mut app, 'm');
+        let centered = time_target(&mut app, &request, 2064);
+        assert!(centered.jump.is_none());
+        assert_eq!(centered.anchor, Some(event(2064)));
+        assert!(!centered.reverse);
+        assert!(centered.inclusive);
+        assert_eq!(app.top, 40);
+        assert_eq!(app.session.views[0].selected, 3);
+        // A resize while the query runs must use the new screen center.
+        app.height = height;
+        app.message(Message::Page(centered.generation, rows(2000..2128)));
+        let slot = (height - 1) / 2;
+        assert_selection(&app, 2064, slot);
+        key(&mut app, KeyCode::Char('k'));
+        assert_selection(&app, 2064 - i64::from(slot > 0), slot.saturating_sub(1));
+        key(&mut app, KeyCode::Char('\''));
+        let previous = page(key(&mut app, KeyCode::Char('\'')));
+        assert_eq!(previous.anchor, Some(event(40)));
+    }
+}
+
+#[test]
+fn time_jump_centers_near_the_end_and_clamps_when_history_is_short() {
+    for (incoming, target, slot) in [(0..3, 2, 2), (2000..2065, 2064, 4)] {
+        let mut app = loaded(0..128, 10);
+        let request = time_jump(&mut app, 'm');
+        let centered = time_target(&mut app, &request, target);
+        app.message(Message::Page(centered.generation, rows(incoming)));
+        assert_selection(&app, target, slot);
+        // Reaching the end does not move the target down to fill the screen.
+        assert!(key(&mut app, KeyCode::Down).is_empty());
+        assert_selection(&app, target, slot);
+    }
+}
+
+#[test]
+fn cancelling_or_failing_either_jump_stage_keeps_the_view_and_ignores_late_results() {
+    for second_stage in [false, true] {
+        for cancel in [false, true] {
+            let mut app = loaded(0..128, 10);
+            app.top = 40;
+            app.session.views[0].selected = 3;
+            let find = time_jump(&mut app, 'm');
+            let pending = if second_stage {
+                time_target(&mut app, &find, 2064)
+            } else {
+                find
+            };
+            if cancel {
+                key(&mut app, KeyCode::Esc);
+            } else {
+                app.message(Message::QueryError(
+                    pending.generation,
+                    "Query failed".into(),
+                ));
+            }
+            assert!(
+                app.message(Message::JumpTarget(pending.generation, None))
+                    .is_empty()
+            );
+            assert!(
+                app.message(Message::Page(pending.generation, rows(2000..2128)))
+                    .is_empty()
+            );
+            assert_eq!(app.top, 40);
+            assert_eq!(app.session.views[0].selected, 3);
+            assert_eq!(app.rows[43].key(), event(43));
+            assert!(time_jump(&mut app, 'm').jump.is_some());
+        }
+    }
+}
+
+#[test]
+fn missing_or_disappearing_jump_targets_keep_the_current_view() {
+    for missing in [false, true] {
+        let mut app = loaded(0..128, 10);
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        let find = time_jump(&mut app, 'y');
+        if missing {
+            app.message(Message::JumpTarget(find.generation, None));
+            assert!(app.status.contains("No matching event"));
+        } else {
+            let centered = time_target(&mut app, &find, 2064);
+            app.message(Message::Page(centered.generation, rows(2000..2003)));
+            assert!(app.status.contains("no longer matches"));
+        }
+        assert_eq!(app.top, 40);
+        assert_eq!(app.session.views[0].selected, 3);
+        assert_eq!(app.rows[43].key(), event(43));
+    }
+}
+
+#[test]
+fn time_prefix_cancels_and_consumes_invalid_suffixes_without_running_other_commands() {
+    for suffix in [
+        KeyCode::Char('x'),
+        KeyCode::Char('q'),
+        KeyCode::Tab,
+        KeyCode::Enter,
+    ] {
+        let mut app = loaded(0..128, 10);
+        key(&mut app, KeyCode::Char('n'));
+        assert!(key(&mut app, suffix).is_empty());
+        assert!(app.status.contains("Unknown n shortcut"));
+        assert!(app.session.views[0].predicate.exclude.is_empty());
+    }
+    let mut app = loaded(0..128, 10);
+    key(&mut app, KeyCode::Char('n'));
+    key(&mut app, KeyCode::Esc);
+    assert!(matches!(
+        key(&mut app, KeyCode::Enter).as_slice(),
+        [Action::Command(Command::Detail(..))]
+    ));
+    key(&mut app, KeyCode::Char('n'));
+    assert!(
+        app.key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL))
+            .is_empty()
+    );
+    assert!(app.status.contains("Unknown n shortcut"));
+    assert!(
+        app.key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::ALT))
+            .is_empty()
+    );
+    key(&mut app, KeyCode::Char('m'));
+    key(&mut app, KeyCode::Char('n'));
+    assert_eq!(app.session.bookmarks[0].name, 'n');
+    key(&mut app, KeyCode::Char('\''));
+    assert!(key(&mut app, KeyCode::Char('n')).is_empty());
+    assert!(matches!(
+        key(&mut app, KeyCode::Enter).as_slice(),
+        [Action::Command(Command::Detail(..))]
+    ));
+}
+
+#[test]
+fn time_jumps_leave_empty_views_forms_and_pending_filter_changes_alone() {
+    let mut app = loaded(0..0, 10);
+    key(&mut app, KeyCode::Char('n'));
+    assert!(key(&mut app, KeyCode::Char('d')).is_empty());
+    let mut app = loaded(0..128, 10);
+    key(&mut app, KeyCode::F(5));
+    key(&mut app, KeyCode::Char('n'));
+    key(&mut app, KeyCode::Char('m'));
+    let filter = page(key(&mut app, KeyCode::Enter));
+    assert_eq!(filter.view.predicate.include, "nm");
+    key(&mut app, KeyCode::Char('n'));
+    assert!(key(&mut app, KeyCode::Char('d')).is_empty());
+    app.message(Message::Page(filter.generation, rows(1..129)));
+    assert_eq!(app.session.views[0].predicate.include, "nm");
+}
+
+#[test]
+fn time_jump_renders_the_destination_at_the_screen_center() {
+    let mut app = loaded(0..128, 10);
+    let mut terminal = Terminal::new(TestBackend::new(120, 19)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let find = time_jump(&mut app, 'm');
+    let centered = time_target(&mut app, &find, 2064);
+    app.message(Message::Page(centered.generation, rows(2000..2128)));
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
+    let lines: Vec<_> = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect();
+    let middle = 5 + (app.height - 1) / 2;
+    assert!(lines[middle].contains("▌"));
+    assert!(lines[middle].contains("/tmp/file-2064"));
+    if std::env::var_os("TIMELINER_CAPTURE_TIME_JUMP").is_some() {
+        println!("{}", lines.join("\n"));
     }
 }

@@ -7,6 +7,7 @@ use timeliner_tui::{
     export::{self, Export},
     ioc::Rules,
     model::{Bookmark, Burst, DisplayRow, EventKey, Row, Session, Tag, View},
+    navigation::Jump,
     query::{self, Cancellation, Page},
     source,
     store::Store,
@@ -367,7 +368,18 @@ fn key(app: &mut App, code: KeyCode) -> Vec<Action> {
 }
 
 fn apply_query(fixture: &Fixture, app: &mut App, request: PageRequest) -> Vec<Action> {
-    let message = if let Some(detection) = request.detect_burst {
+    let message = if let Some(jump) = request.jump {
+        Message::JumpTarget(
+            request.generation,
+            jump.find(
+                &fixture.store,
+                &request.view,
+                &Cancellation::never(),
+                |_| {},
+            )
+            .unwrap(),
+        )
+    } else if let Some(detection) = request.detect_burst {
         Message::Burst(
             request.generation,
             burst::detect(
@@ -911,4 +923,150 @@ fn summary_tag_counts_respect_path_and_timestamp_type_filters() {
         .unwrap();
     burst::apply_tag_change(&mut view, &change).unwrap();
     assert_eq!(view.bursts[0].tagged, 1);
+}
+
+#[test]
+fn time_jumps_start_after_a_burst_and_reveal_only_the_destination_on_success() {
+    let mut seconds: Vec<_> = (0..=65).map(|second| (second, 8, 0)).collect();
+    seconds.extend([(121, 9, 0), (122, 9, 0), (500, 10, 0)]);
+    let fixture = Fixture::new(&seconds);
+    let raw = fixture.raw(&View::default());
+    let bursts: Vec<_> = [0, 121, 500]
+        .into_iter()
+        .map(|second| {
+            let origin = raw
+                .iter()
+                .find(|row| row.key.epoch == BASE + second)
+                .unwrap();
+            fixture.detect(&View::default(), origin, 5).unwrap()
+        })
+        .collect();
+    for cancel in [false, true] {
+        let mut app = loaded(&fixture, bursts[0].first);
+        app.session.views[0].bursts = bursts.clone();
+        key(&mut app, KeyCode::Char('g'));
+        let initial = request(key(&mut app, KeyCode::Char('g')));
+        assert!(apply_query(&fixture, &mut app, initial).is_empty());
+        assert!(matches!(app.rows[0], DisplayRow::Burst(_)));
+        key(&mut app, KeyCode::Char('n'));
+        let find = request(key(&mut app, KeyCode::Char('m')));
+        // The source burst spans a minute boundary. Jump from its end, not its start.
+        assert_eq!(find.jump, Some(Jump::TimeBoundary(BASE + 80)));
+        let centered = request(apply_query(&fixture, &mut app, find));
+        assert_eq!(centered.anchor, Some(bursts[1].first));
+        assert_eq!(
+            centered.view.bursts,
+            vec![bursts[0].clone(), bursts[2].clone()]
+        );
+        assert_eq!(app.session.views[0].bursts, bursts);
+        if cancel {
+            key(&mut app, KeyCode::Esc);
+        }
+        assert!(apply_query(&fixture, &mut app, centered).is_empty());
+        if cancel {
+            assert_eq!(app.session.views[0].bursts, bursts);
+            assert!(matches!(app.rows[0], DisplayRow::Burst(_)));
+        } else {
+            let view = &app.session.views[0];
+            assert_eq!(view.bursts, vec![bursts[0].clone(), bursts[2].clone()]);
+            assert_eq!(app.rows[app.top + view.selected].key(), bursts[1].first);
+            assert!(app.rows[app.top + view.selected].event().is_some());
+            // The previous summary is still reachable with k.
+            key(&mut app, KeyCode::Char('k'));
+            assert!(matches!(
+                app.rows[app.top + app.session.views[0].selected],
+                DisplayRow::Burst(_)
+            ));
+        }
+    }
+}
+
+fn worker_query(workers: &Workers, app: &mut App, page: PageRequest) -> Vec<Action> {
+    workers.clock.store(page.generation, Ordering::Relaxed);
+    workers.pages.send(page).unwrap();
+    loop {
+        let message = workers
+            .messages
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        match &message {
+            Message::Page(..) | Message::JumpTarget(..) => return app.message(message),
+            Message::Error(error) | Message::QueryError(_, error) => panic!("{error}"),
+            _ => {
+                app.message(message);
+            }
+        }
+    }
+}
+
+#[test]
+fn worker_time_jumps_find_the_first_filtered_event_across_a_gap_and_center_it() {
+    let fixture = Fixture::new(&[(0, 300, 10), (10, 300, 10), (10000, 20, 10)]);
+    let raw = fixture.raw(&View::default());
+    for row in &raw {
+        if row.path != "/usr/lib/file-4" {
+            fixture
+                .store
+                .set_tag(row.key.record, Some(Tag::Suspicious))
+                .unwrap();
+        }
+    }
+    let mut view = View::default();
+    view.predicate.hosts = vec!["host-a".into()];
+    view.predicate.include = "^/usr/lib/".into();
+    view.predicate.exclude = vec!["/file-2$".into()];
+    view.predicate.tags = Some(vec![Tag::Suspicious]);
+    view.time_mask = 1;
+    view.after = Some(BASE);
+    let matching = fixture.raw(&view);
+    let expected = matching
+        .iter()
+        .find(|row| row.key.epoch == BASE + 10000)
+        .unwrap();
+    assert_eq!(expected.path, "/usr/lib/file-8");
+
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    loop {
+        match workers
+            .messages
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+        {
+            Message::Ready(..) => break,
+            Message::Error(error) => panic!("{error}"),
+            _ => {}
+        }
+    }
+    for before in [None, Some(BASE + 5000)] {
+        view.before = before;
+        let mut app = App::default();
+        app.height = 10;
+        let mut session = Session::default();
+        session.views[0] = view.clone();
+        let initial = request(app.message(Message::Ready(session, String::new())));
+        assert!(worker_query(&workers, &mut app, initial).is_empty());
+        let origin = app.rows[app.top + app.session.views[0].selected].key();
+        key(&mut app, KeyCode::Char('n'));
+        let find = request(key(&mut app, KeyCode::Char('m')));
+        let actions = worker_query(&workers, &mut app, find);
+        if before.is_some() {
+            assert!(actions.is_empty());
+            assert!(app.status.contains("No matching event"));
+            assert_eq!(
+                app.rows[app.top + app.session.views[0].selected].key(),
+                origin
+            );
+        } else {
+            let centered = request(actions);
+            assert_eq!(centered.anchor, Some(expected.key));
+            assert!(worker_query(&workers, &mut app, centered).is_empty());
+            assert_eq!(app.session.views[0].selected, 4);
+            assert_eq!(app.rows[app.top + 4].key(), expected.key);
+            assert_eq!(app.rows[app.top + 4].event().unwrap().macb & 1, 1);
+            assert_eq!(app.session.views[0].predicate, view.predicate);
+            key(&mut app, KeyCode::Char('k'));
+            assert!(app.rows[app.top + 3].key() < expected.key);
+        }
+    }
+    workers.shutdown();
 }

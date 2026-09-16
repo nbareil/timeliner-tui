@@ -5,6 +5,7 @@ use crate::{
         Bookmark, DisplayRow, EventKey, Predicate, Row, Session, Tag, View, boundary, display_text,
         macb, validate_view,
     },
+    navigation::{Jump, TimeUnit},
     worker::{BurstRequest, Command, Message, PageRequest, Workers},
 };
 use anyhow::{Result, bail};
@@ -49,6 +50,9 @@ Click tabs, function buttons, menu choices, and form fields.
 Mouse wheel scrolls details/help/bookmarks or moves between form fields.
 Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
+nm/nh/nd/nM/ny jump to the next minute/hour/day/month/year and center it.
+Jumps use the selected timezone and current filters; '' returns.
+From a collapsed burst, jumps start after its end.
 zt/zz/zb put the selected event at the top/middle/bottom.
 z Enter / z. / z- do the same. Selection stays on the same event.
 TAB cycles a record's assessment. ENTER/F3 opens full details.
@@ -98,6 +102,8 @@ State is saved automatically. Sources are never modified.";
 #[derive(Clone, Copy)]
 enum Load {
     DetectBurst,
+    FindJump(Jump),
+    CenterJump(EventKey),
     Replace,
     Filter(Option<EventKey>),
     FilterLast(Option<EventKey>),
@@ -328,6 +334,7 @@ impl App {
             limit,
             context_before: 0,
             detect_burst: None,
+            jump: None,
         })
     }
     fn refresh(&mut self) -> Action {
@@ -432,6 +439,39 @@ impl App {
         self.remember();
         None
     }
+    fn jump_origin(&mut self) -> Option<EventKey> {
+        if self.pending.is_some() {
+            self.status = "Loading… (Escape cancels)".into();
+            return None;
+        }
+        let Some(row) = self.selected() else {
+            self.status = "No event selected".into();
+            return None;
+        };
+        Some(match row {
+            DisplayRow::Event(row) => row.key,
+            DisplayRow::Burst(burst) => burst.last,
+        })
+    }
+    fn next_time(&mut self, unit: TimeUnit) -> Option<Action> {
+        let epoch = self.jump_origin()?.epoch;
+        let tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
+        let boundary = match unit.next_boundary(epoch, tz) {
+            Ok(boundary) => boundary,
+            Err(error) => {
+                self.status = error.to_string();
+                return None;
+            }
+        };
+        Some(self.find_jump(Jump::TimeBoundary(boundary)))
+    }
+    fn find_jump(&mut self, jump: Jump) -> Action {
+        let Action::Page(mut request) = self.load(Load::FindJump(jump), None, None, true) else {
+            unreachable!()
+        };
+        request.jump = Some(jump);
+        Action::Page(request)
+    }
     fn mark_delete(&mut self, name: char) {
         let count = self.session.bookmarks.len();
         self.session.bookmarks.retain(|mark| mark.name != name);
@@ -506,7 +546,13 @@ impl App {
                     limit,
                     ..
                 } = pending;
-                if matches!(mode, Load::DetectBurst) {
+                if matches!(mode, Load::DetectBurst | Load::FindJump(_)) {
+                    return vec![];
+                }
+                if let Load::CenterJump(focus) = mode
+                    && !rows.iter().any(|row| row.key() == focus)
+                {
+                    self.status = "Jump target no longer matches this view".into();
                     return vec![];
                 }
                 if let Load::Mark(key, name) = mode {
@@ -539,7 +585,20 @@ impl App {
                     return vec![self.load(mode, candidate, Some(focus), true)];
                 }
                 match mode {
-                    Load::DetectBurst => unreachable!(),
+                    Load::DetectBurst | Load::FindJump(_) => unreachable!(),
+                    Load::CenterJump(focus) => {
+                        self.remember();
+                        self.previous = Some((self.session.active, self.view().clone()));
+                        if let Some(view) = candidate {
+                            *self.view_mut() = view;
+                        }
+                        let index = rows.partition_point(|row| row.key() < focus);
+                        self.end_before = index < limit / 2;
+                        self.end_after = rows.len() < limit;
+                        self.rows = rows;
+                        self.top = index.saturating_sub(RowPosition::Middle.slot(self.height));
+                        self.view_mut().selected = index - self.top;
+                    }
                     Load::Replace
                     | Load::Filter(_)
                     | Load::FilterLast(_)
@@ -631,6 +690,43 @@ impl App {
                 };
                 self.remember();
                 vec![]
+            }
+            Message::JumpTarget(generation, target) => {
+                let Some(pending) = self
+                    .pending
+                    .as_ref()
+                    .filter(|pending| pending.generation == generation)
+                else {
+                    return vec![];
+                };
+                let Load::FindJump(jump) = pending.mode else {
+                    return vec![];
+                };
+                self.pending = None;
+                let Some(target) = target else {
+                    self.status = match jump {
+                        Jump::TimeBoundary(_) => {
+                            "No matching event at or after the next time boundary"
+                        }
+                    }
+                    .into();
+                    return vec![];
+                };
+                let mut view = self.view().clone();
+                view.bursts
+                    .retain(|burst| burst.host != target.host || !burst.contains_key(target.key));
+                let Action::Page(mut request) = self.load(
+                    Load::CenterJump(target.key),
+                    Some(view),
+                    Some(target.key),
+                    true,
+                ) else {
+                    unreachable!()
+                };
+                // Resolve the event before loading context: a sparse timeline can
+                // have a large gap between the calendar boundary and its next event.
+                request.context_before = request.limit / 2;
+                vec![Action::Page(request)]
             }
             Message::Burst(generation, burst) => {
                 if !self.pending.as_ref().is_some_and(|pending| {
@@ -1100,6 +1196,23 @@ impl App {
         }
         if let Some(prefix) = self.prefix.take() {
             match (prefix, key.code) {
+                ('n', code) => {
+                    if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
+                        let unit = match code {
+                            KeyCode::Char('m') => Some(TimeUnit::Minute),
+                            KeyCode::Char('h') => Some(TimeUnit::Hour),
+                            KeyCode::Char('d') => Some(TimeUnit::Day),
+                            KeyCode::Char('M') => Some(TimeUnit::Month),
+                            KeyCode::Char('y') => Some(TimeUnit::Year),
+                            _ => None,
+                        };
+                        if let Some(unit) = unit {
+                            return self.next_time(unit).into_iter().collect();
+                        }
+                    }
+                    self.status = "Unknown n shortcut: use nm, nh, nd, nM, or ny".into();
+                    return vec![];
+                }
                 ('z', code) => {
                     if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
                         let position = match code {
@@ -1161,6 +1274,11 @@ impl App {
             }
         }
         match key.code {
+            KeyCode::Char('n') if key.modifiers.is_empty() => {
+                self.prefix = Some('n');
+                self.status =
+                    "n… minute: m · hour: h · day: d · month: M · year: y (Esc cancels)".into();
+            }
             KeyCode::Char('c') if key.modifiers.is_empty() => return self.collapse_burst(),
             KeyCode::Char('C') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
                 self.form(FormKind::Burst);

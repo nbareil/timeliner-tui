@@ -78,6 +78,7 @@ byte offset, original record, and matching rules.
 | j / k | Move the highlight within the visible screen |
 | Page Up / Page Down | Scroll a screen |
 | gg / G | Jump to the first / last matching event |
+| nm / nh / nd / nM / ny | Jump to the next minute / hour / day / month / year, centered |
 | zt / zz / zb | Put the selected event at the top / middle / bottom |
 | z ENTER / z. / z- | Aliases for zt / zz / zb |
 | TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged |
@@ -109,6 +110,22 @@ The `z` shortcuts scroll around the selected event without changing its identity
 They load more rows when needed and stop at the beginning of the timeline if
 there are too few preceding events. Near the end, empty space can remain below
 the last event. Escape cancels a pending shortcut or page load.
+
+Press `n`, then `m`, `h`, `d`, `M` (Shift+m), or `y` to move to the first
+matching event at or after the next time boundary in the displayed timezone.
+For example, `nh` from 10:25 jumps to the first match at or after 11:00;
+`nM` jumps to the first day of the next month. Current filters stay active.
+The destination is centered, with preceding events available above it.
+If there are too few preceding events, it appears closer to the top.
+If no later event matches, the view stays where it is. Escape cancels either
+the shortcut or its query; `''` returns to the location before a successful jump.
+
+Minute and hour jumps follow clock boundaries, including repeated hours during
+daylight-saving changes. Day, month, and year jumps use local midnight; if that
+midnight is skipped, they use the first valid instant afterward.
+From a collapsed burst, a jump starts after the burst's final timestamp.
+A destination hidden inside another burst opens that burst; unrelated folds
+stay closed. See the [terminal capture](docs/images/time-jump.txt).
 
 Press `q` to save and quit from the timeline, help, or record details. Ctrl+C
 also quits from dialogs. In text fields, `q` is ordinary input; in bookmark
@@ -371,6 +388,8 @@ storage, indexed queries, export, background workers, and the terminal UI.
 `src/ui/mouse.rs` handles pointer input and the controls registered during rendering.
 `src/burst.rs` detects dense seconds and builds display pages containing events
 or fold summaries; raw queries and exports continue to use `src/query.rs`.
+`src/navigation.rs` calculates timezone-aware boundaries and finds time jump
+destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
 Integration tests under `tests/` exercise evidence preservation, filtering,
