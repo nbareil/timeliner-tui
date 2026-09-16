@@ -1,0 +1,8 @@
+/target/
+/.cargo-home/
+/result
+/result-*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+/.workspaces/
