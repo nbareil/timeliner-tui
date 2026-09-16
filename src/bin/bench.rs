@@ -72,6 +72,7 @@ fn main() -> Result<()> {
     let cancel = Cancellation::never();
     let view = View::default();
     let mut times = Vec::new();
+    let mut reopened_reader_times = Vec::new();
     let mut exclusion_add_times = Vec::new();
     let mut exclusion_remove_times = Vec::new();
     let mut exclusion_candidates_max = 0;
@@ -139,8 +140,30 @@ fn main() -> Result<()> {
             |_| {},
         )?;
         exclusion_remove_times.push(start.elapsed().as_secs_f64() * 1000.0);
+        // Compare the same query with the former per-request reader lifecycle.
+        let start = Instant::now();
+        {
+            let reader = Store::reader(&store.root)?;
+            query::page(
+                &reader,
+                &view,
+                query::Page {
+                    anchor: Some(EventKey {
+                        epoch: 1_600_000_000 + i * 150_000,
+                        record: 0,
+                    }),
+                    limit: 100,
+                    inclusive: true,
+                    ..query::Page::default()
+                },
+                &cancel,
+                |_| {},
+            )?;
+        }
+        reopened_reader_times.push(start.elapsed().as_secs_f64() * 1000.0);
     }
     times.sort_by(f64::total_cmp);
+    reopened_reader_times.sort_by(f64::total_cmp);
     exclusion_add_times.sort_by(f64::total_cmp);
     exclusion_remove_times.sort_by(f64::total_cmp);
     let filtered = View {
@@ -151,7 +174,8 @@ fn main() -> Result<()> {
         ..View::default()
     };
     let start = Instant::now();
-    query::page(
+    let mut filter_candidates = 0;
+    let filtered_rows = query::page(
         &store,
         &filtered,
         query::Page {
@@ -159,13 +183,14 @@ fn main() -> Result<()> {
             ..query::Page::default()
         },
         &cancel,
-        |_| {},
+        |count| filter_candidates = count,
     )?;
     let filter = start.elapsed().as_secs_f64();
     println!(
         "{}",
         serde_json::json!({"records":args.records,"import_seconds":import,"records_per_second":import.map(|seconds|args.records as f64/seconds),
-        "page_p95_ms":times[190],"path_filter_seconds":filter,
+        "page_p95_ms":times[190],"reopened_reader_page_p95_ms":reopened_reader_times[190],"path_filter_seconds":filter,
+        "path_filter_rows":filtered_rows.len(),"path_filter_candidates":filter_candidates,
         "exclusion_add_p95_ms":exclusion_add_times[190],"exclusion_remove_p95_ms":exclusion_remove_times[190],
         "exclusion_candidates_max":exclusion_candidates_max,"new_filter_cache_bytes":cache_bytes()?.saturating_sub(cache_bytes_before),
         "index_bytes":std::fs::metadata(args.directory.join("workspace/index.sqlite"))?.len(),

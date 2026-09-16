@@ -383,6 +383,10 @@ impl Workers {
         });
         let page_clock = clock.clone();
         let query_thread = thread::spawn(move || {
+            // Keep the reader's bounded SQLite page and statement caches warm.
+            // Each completed request drops its statements, releasing its snapshot
+            // so the next request can see the controller's committed changes.
+            let mut reader = None;
             while let Ok(mut request) = page_rx.recv() {
                 while let Ok(newer) = page_rx.try_recv() {
                     request = newer;
@@ -392,9 +396,13 @@ impl Workers {
                     generation: request.generation,
                 };
                 let result = (|| -> Result<Message> {
-                    let store = Store::reader(&root)?;
+                    cancel.check()?;
+                    if reader.is_none() {
+                        reader = Some(Store::reader(&root)?);
+                    }
+                    let store = reader.as_ref().unwrap();
                     if let Some(jump) = request.jump {
-                        let target = jump.find(&store, &request.view, &cancel, |count| {
+                        let target = jump.find(store, &request.view, &cancel, |count| {
                             if count.is_multiple_of(65536) {
                                 let _ = messages_tx.send(Message::Progress(
                                     request.generation,
@@ -406,7 +414,7 @@ impl Workers {
                     }
                     if let Some(detection) = request.detect_burst {
                         let found = burst::detect(
-                            &store,
+                            store,
                             &request.view,
                             detection.origin,
                             &detection.host,
@@ -426,7 +434,7 @@ impl Workers {
                         return Ok(Message::Burst(request.generation, found));
                     }
                     let rows = burst::page_with_context(
-                        &store,
+                        store,
                         &request.view,
                         query::Page {
                             anchor: request.anchor,

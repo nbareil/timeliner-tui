@@ -104,6 +104,26 @@ fn older_indexes_read_missing_size_metadata_without_mistaking_unknown_for_zero()
 }
 
 #[test]
+fn tag_cache_joins_keep_display_metadata_and_legacy_source_fallback() {
+    let (dir, store) = fixture();
+    store
+        .set_tags(&(1..=6).collect::<Vec<_>>(), Some(Tag::Ioc))
+        .unwrap();
+    let mut view = View::default();
+    view.predicate.tags = Some(vec![Tag::Ioc]);
+    assert_sizes(&rows(&store, &view));
+    store
+        .conn
+        .execute("UPDATE records SET is_directory=NULL,zero_size=NULL", [])
+        .unwrap();
+    assert_sizes(&rows(&store, &view));
+    fs::remove_file(dir.path().join("source.body")).unwrap();
+    let result = rows(&store, &view);
+    assert_eq!(result.len(), 6);
+    assert!(result.iter().all(|row| !row.zero_size && !row.is_directory));
+}
+
+#[test]
 fn zero_byte_paths_are_faint_and_regular_weight_with_tags_and_selection() {
     let (_dir, store) = fixture();
     for theme in [Theme::Light, Theme::Dark] {

@@ -1,0 +1,124 @@
+{
+  "date": "2026-09-16",
+  "baseline_commit": "59f911b",
+  "platform": "Linux x86_64, Intel Xeon Gold 6240",
+  "build": "Rust 1.95.0, cargo build --release --locked --offline",
+  "workload": {
+    "source_records": 1000000,
+    "timestamp_events": 4000000,
+    "page_size": 100,
+    "cursor_queries_per_run": 200,
+    "sparse_regex": "/file42\\.log$",
+    "runs": "Three alternating baseline/optimized --reuse pairs against the same generated workspace; no overlapping audit builds or tests.",
+    "limits": "Warm filesystem caches; no end-to-end TUI latency or 10M/100M measurements. The optimized benchmark additionally times opening and closing a reader around each page."
+  },
+  "baseline": [
+    {
+      "exclusion_add_p95_ms": 0.6179659999999999,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.411593,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40680 kB",
+        "VmRSS:\t   40680 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.583476,
+      "path_filter_seconds": 17.512704436,
+      "records": 1000000,
+      "records_per_second": null
+    },
+    {
+      "exclusion_add_p95_ms": 0.7328709999999999,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.473425,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40684 kB",
+        "VmRSS:\t   40684 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.666992,
+      "path_filter_seconds": 17.108825134,
+      "records": 1000000,
+      "records_per_second": null
+    },
+    {
+      "exclusion_add_p95_ms": 0.589254,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.411594,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40680 kB",
+        "VmRSS:\t   40680 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.5942360000000001,
+      "path_filter_seconds": 17.045783731,
+      "records": 1000000,
+      "records_per_second": null
+    }
+  ],
+  "optimized": [
+    {
+      "exclusion_add_p95_ms": 0.240076,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.14089,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40856 kB",
+        "VmRSS:\t   40692 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.245142,
+      "path_filter_candidates": 4000000,
+      "path_filter_rows": 40,
+      "path_filter_seconds": 5.981081032,
+      "records": 1000000,
+      "records_per_second": null,
+      "reopened_reader_page_p95_ms": 0.7448389999999999
+    },
+    {
+      "exclusion_add_p95_ms": 0.289107,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.179604,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40768 kB",
+        "VmRSS:\t   40604 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.302517,
+      "path_filter_candidates": 4000000,
+      "path_filter_rows": 40,
+      "path_filter_seconds": 5.885810298,
+      "records": 1000000,
+      "records_per_second": null,
+      "reopened_reader_page_p95_ms": 0.847626
+    },
+    {
+      "exclusion_add_p95_ms": 0.224823,
+      "exclusion_candidates_max": 112,
+      "exclusion_remove_p95_ms": 0.132216,
+      "import_seconds": null,
+      "index_bytes": 269459456,
+      "memory": [
+        "VmHWM:\t   40936 kB",
+        "VmRSS:\t   40776 kB"
+      ],
+      "new_filter_cache_bytes": 0,
+      "page_p95_ms": 0.241564,
+      "path_filter_candidates": 4000000,
+      "path_filter_rows": 40,
+      "path_filter_seconds": 5.837842825,
+      "records": 1000000,
+      "records_per_second": null,
+      "reopened_reader_page_p95_ms": 0.719864
+    }
+  ]
+}

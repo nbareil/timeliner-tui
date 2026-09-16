@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use regex::Regex;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
@@ -291,9 +291,17 @@ pub(crate) fn page_omitting(
     }
     let matcher = Matcher::new(&view.predicate)?;
     let path = cache(store, &view.predicate, cancel, &mut progress)?;
-    let cache_db = path.as_ref().map(Connection::open).transpose()?;
+    let cache_db = path
+        .as_ref()
+        .map(|path| Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY))
+        .transpose()?;
     if let Some(db) = &cache_db {
         configure(db)?;
+        db.execute(
+            "ATTACH DATABASE ? AS record_store",
+            [store.root.join("index.sqlite").to_string_lossy()],
+        )?;
+        db.execute_batch("PRAGMA record_store.cache_size=-32768;")?;
     }
     let db = cache_db.as_ref().unwrap_or(&store.conn);
     cancel.install(db)?;
@@ -320,40 +328,27 @@ pub(crate) fn page_omitting(
             lower = if inclusive { ">=" } else { ">" };
         }
     }
-    let mut details = store.conn.prepare_cached(
-        "SELECT host,path,tag,manual_tag IS NULL,matches!='[]',is_directory,zero_size FROM records WHERE id=?",
-    )?;
     let mut result = Vec::with_capacity(limit);
     let mut legacy_metadata = HashMap::new();
     let mut checked = 0_u64;
     loop {
         cancel.check()?;
-        let sql = cursor_sql(reverse, lower, upper);
+        let sql = cursor_sql(reverse, lower, upper, cache_db.is_some());
         let mut stmt = db.prepare_cached(&sql)?;
-        let keys = stmt
-            .query_map(
-                params![
-                    lo.epoch,
-                    lo.record,
-                    hi.epoch,
-                    hi.record,
-                    view.time_mask,
-                    limit as i64
-                ],
-                |r| {
-                    Ok((
-                        EventKey {
-                            epoch: r.get(0)?,
-                            record: r.get(1)?,
-                        },
-                        r.get::<_, u8>(2)?,
-                    ))
-                },
-            )?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut candidates = stmt.query(params![
+            lo.epoch,
+            lo.record,
+            hi.epoch,
+            hi.record,
+            view.time_mask,
+        ])?;
         let mut skipped_to = None;
-        for &(key, macb) in &keys {
+        while let Some(candidate) = candidates.next()? {
             cancel.check()?;
+            let key = EventKey {
+                epoch: candidate.get(0)?,
+                record: candidate.get(1)?,
+            };
             // Seek over known host-only runs, rather than reading every hidden
             // event on each visit. Mixed-host runs retain the other hosts.
             if let Some(burst) = bursts
@@ -363,32 +358,22 @@ pub(crate) fn page_omitting(
                 skipped_to = Some(if reverse { burst.first } else { burst.last });
                 break;
             }
-            let (mut row, directory, zero_size) = details.query_row([key.record], |r| {
-                Ok((
-                    Row {
-                        key,
-                        macb,
-                        host: r.get(0)?,
-                        path: r.get(1)?,
-                        tag: Tag::from_i64(r.get(2)?),
-                        automatic: r.get(3)?,
-                        ioc_match: r.get(4)?,
-                        is_directory: false,
-                        zero_size: false,
-                    },
-                    r.get::<_, Option<bool>>(5)?,
-                    r.get::<_, Option<bool>>(6)?,
-                ))
-            })?;
+            // Borrow text from SQLite while filtering. Only visible rows need
+            // owned strings and display metadata.
+            let host = candidate.get_ref(3)?.as_str()?;
+            let path = candidate.get_ref(4)?.as_str()?;
+            let tag = Tag::from_i64(candidate.get(5)?);
             checked += 1;
             if checked.is_multiple_of(1024) {
                 progress(checked);
             }
-            if matcher.matches(&row.path, &row.host, row.tag)
+            if matcher.matches(path, host, tag)
                 && !bursts
                     .iter()
-                    .any(|burst| burst.host == row.host && burst.contains_key(key))
+                    .any(|burst| burst.host == host && burst.contains_key(key))
             {
+                let directory: Option<bool> = candidate.get(8)?;
+                let zero_size: Option<bool> = candidate.get(9)?;
                 let fallback = if directory.is_none() || zero_size.is_none() {
                     *legacy_metadata.entry(key.record).or_insert_with(|| {
                         // Older indexes lack display metadata. Inspect only matching
@@ -403,18 +388,25 @@ pub(crate) fn page_omitting(
                 } else {
                     (false, false)
                 };
-                row.is_directory = directory.unwrap_or(fallback.0);
-                row.zero_size = zero_size.unwrap_or(fallback.1);
-                result.push(row);
+                result.push(Row {
+                    key,
+                    macb: candidate.get(2)?,
+                    host: host.to_owned(),
+                    path: path.to_owned(),
+                    tag,
+                    automatic: candidate.get(6)?,
+                    ioc_match: candidate.get(7)?,
+                    is_directory: directory.unwrap_or(fallback.0),
+                    zero_size: zero_size.unwrap_or(fallback.1),
+                });
                 if result.len() == limit {
                     break;
                 }
             }
         }
-        if result.len() == limit || (skipped_to.is_none() && keys.len() < limit) {
+        let Some(last) = skipped_to else {
             break;
-        }
-        let last = skipped_to.unwrap_or_else(|| keys.last().unwrap().0);
+        };
         if reverse {
             hi = last;
             upper = "<";
@@ -431,14 +423,24 @@ pub(crate) fn page_omitting(
     Ok(result)
 }
 
-fn cursor_sql(reverse: bool, lower: &str, upper: &str) -> String {
+fn cursor_sql(reverse: bool, lower: &str, upper: &str, cached: bool) -> String {
     let order = if reverse { "DESC" } else { "ASC" };
+    let records = if cached {
+        "record_store.records"
+    } else {
+        "records"
+    };
     // Both bounds must be composite. A separate scalar epoch range can make
     // SQLite scan from the timeframe's beginning, ignoring the cursor seek.
+    // CROSS JOIN keeps events as the outer loop, so rows stream in key order
+    // without sorting the timeframe before the caller can stop at its limit.
     format!(
-        "SELECT epoch,record,macb FROM events WHERE (epoch,record) {lower} (?,?)
-        AND (epoch,record) {upper} (?,?) AND (macb & ?) != 0
-        ORDER BY epoch {order},record {order} LIMIT ?"
+        "SELECT e.epoch,e.record,e.macb,r.host,r.path,r.tag,
+                r.manual_tag IS NULL,r.matches!='[]',r.is_directory,r.zero_size
+         FROM events e CROSS JOIN {records} r ON r.id=e.record
+         WHERE (e.epoch,e.record) {lower} (?,?)
+         AND (e.epoch,e.record) {upper} (?,?) AND (e.macb & ?) != 0
+         ORDER BY e.epoch {order},e.record {order}"
     )
 }
 
@@ -448,16 +450,37 @@ mod tests {
     #[test]
     fn sqlite_uses_the_complete_cursor_for_both_index_bounds() {
         let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE events(epoch INTEGER,record INTEGER,macb INTEGER,PRIMARY KEY(epoch,record)) WITHOUT ROWID;").unwrap();
-        for reverse in [true, false] {
-            let sql = format!("EXPLAIN QUERY PLAN {}", cursor_sql(reverse, ">", "<="));
-            let plan: String = db
-                .query_row(&sql, params![100, 40, 200, 80, 15, 100], |r| r.get(3))
-                .unwrap();
-            assert!(
-                plan.contains("((epoch,record)>(?,?) AND (epoch,record)<(?,?))"),
-                "{plan}"
-            );
+        db.execute_batch(
+            "CREATE TABLE events(epoch INTEGER,record INTEGER,macb INTEGER,PRIMARY KEY(epoch,record)) WITHOUT ROWID;
+             CREATE TABLE records(id INTEGER PRIMARY KEY,host TEXT,path TEXT,tag INTEGER,
+                 manual_tag INTEGER,matches TEXT,is_directory INTEGER,zero_size INTEGER);
+             ATTACH DATABASE ':memory:' AS record_store;
+             CREATE TABLE record_store.records(id INTEGER PRIMARY KEY,host TEXT,path TEXT,tag INTEGER,
+                 manual_tag INTEGER,matches TEXT,is_directory INTEGER,zero_size INTEGER);",
+        ).unwrap();
+        for cached in [false, true] {
+            for reverse in [true, false] {
+                let sql = format!(
+                    "EXPLAIN QUERY PLAN {}",
+                    cursor_sql(reverse, ">", "<=", cached)
+                );
+                let plan = db
+                    .prepare(&sql)
+                    .unwrap()
+                    .query_map(params![100, 40, 200, 80, 15], |r| r.get::<_, String>(3))
+                    .unwrap()
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .unwrap();
+                assert_eq!(plan.len(), 2, "{plan:?}");
+                assert!(
+                    plan[0].contains("((epoch,record)>(?,?) AND (epoch,record)<(?,?))"),
+                    "{plan:?}"
+                );
+                assert!(
+                    plan[1].contains("SEARCH r USING INTEGER PRIMARY KEY"),
+                    "{plan:?}"
+                );
+            }
         }
     }
 }

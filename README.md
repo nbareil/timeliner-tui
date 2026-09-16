@@ -562,6 +562,13 @@ the generated data for inspection. Increase `--records` to `10000000` or
 `100000000` on appropriately sized storage. See [benchmark results](docs/benchmarks.md)
 for measured results and their limits.
 
+The [performance audit](docs/performance-audit.md) records the query and worker
+improvements and remaining opportunities. On the measured 1M-record workload,
+streamed joins reduced sparse-search time from 17.1 s to 5.9 s. The query worker
+retains its bounded SQLite cache between requests; its cached pages can remain
+resident while idle. The benchmark reports both retained-reader and
+reopened-reader page timings, plus sparse-search candidate and result counts.
+
 The parser accepts integer epoch seconds and unsigned 64-bit sizes, matching the
 original Timeliner's supported bodyfiles. Unsupported or malformed records are
 reported with source offsets. Records larger than 16 MiB are reported as malformed

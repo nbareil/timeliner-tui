@@ -71,6 +71,46 @@ A separate PTY workflow check exercised tagging, details, bookmarks, forked and
 smart tabs, bodyfile export, autosave, and restoration of terminal settings.
 Automated rendering tests cover 120-, 80-, and 60-column layouts.
 
+## Performance audit: streamed joins and reader reuse
+
+The 2026-09-16 audit compared commit `59f911b` with streamed event-to-record
+joins and a retained query-worker reader. Both binaries used Rust 1.95.0 release
+builds and the same generated workspace: 1,000,000 records and 4,000,000 events.
+Three alternating baseline/optimized `--reuse` pairs ran without overlapping
+audit builds or tests. Filesystem caches were warm.
+
+Each run measured 200 queries per page operation. The table reports the median
+of the three runs' p95 values; sparse-search time is the median elapsed time.
+
+| Operation | Baseline | Optimized |
+| --- | ---: | ---: |
+| Retrieve 100 rows, p95 | 0.594 ms | 0.245 ms |
+| Add an exclusion and retrieve 100 rows, p95 | 0.618 ms | 0.240 ms |
+| Remove the exclusion and retrieve 100 rows, p95 | 0.412 ms | 0.141 ms |
+| Sparse `/file42\.log$` search | 17.109 s | 5.886 s |
+| Peak benchmark RSS, median | 39.7 MiB | 39.9 MiB |
+| New filter-cache files written | 0 bytes | 0 bytes |
+
+Sparse search was 2.9× faster. All optimized runs returned 40 matching rows
+after examining exactly 4,000,000 candidates. Times ranged from 17.046–17.513 s
+before the change and 5.838–5.981 s afterward. The maximum number of candidates
+for an excluded page stayed at 112.
+
+The optimized benchmark also opens, configures, and closes a reader around
+each of 200 additional page queries. Including that lifecycle produced a median
+p95 of 0.745 ms, compared with 0.245 ms for the retained connection. Both use
+the new query implementation. This isolates connection overhead; it does not
+measure the worker's message queues or terminal drawing.
+
+The main query-worker connection now retains its bounded SQLite cache between
+requests. Its idle memory can therefore remain higher after browsing than
+when each request closed the connection. Benchmark RSS above is for the
+query benchmark, not the interactive application.
+
+See the [audit findings](performance-audit.md) and
+[raw measurements](performance-audit-results.json). Import, cold-disk latency,
+dense tag views, burst detection, and 10M/100M workloads were not remeasured.
+
 ## Reproduce
 
 ```sh
@@ -89,7 +129,10 @@ A fresh benchmark requires a nonexistent destination directory. `--reuse`
 validates the expected record count and skips import. The current benchmark
 reports `exclusion_add_p95_ms`, `exclusion_remove_p95_ms`,
 `exclusion_candidates_max`, and `new_filter_cache_bytes` as well as page and
-sparse-search timings. Path filters no longer reuse legacy membership caches.
+sparse-search timings. It also reports `reopened_reader_page_p95_ms`,
+`path_filter_rows`, and `path_filter_candidates` to expose connection overhead
+and verify how much work a sparse search performs. Path filters no longer reuse
+legacy membership caches.
 
 ## Validation limits
 
