@@ -1,0 +1,38 @@
+After zt — event 43 stays selected
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+▌ 2020-09-13 12:27:23 host-a             macb /tmp/file-43
+  2020-09-13 12:27:24 host-a             macb /tmp/file-44
+  2020-09-13 12:27:25 host-a             macb /tmp/file-45
+  2020-09-13 12:27:26 host-a             macb /tmp/file-46
+  2020-09-13 12:27:27 host-a             macb /tmp/file-47
+  2020-09-13 12:27:28 host-a             macb /tmp/file-48
+  2020-09-13 12:27:29 host-a             macb /tmp/file-49
+  2020-09-13 12:27:30 host-a             macb /tmp/file-50
+  2020-09-13 12:27:31 host-a             macb /tmp/file-51
+  2020-09-13 12:27:32 host-a             macb /tmp/file-52
+
+After zz — event 43 stays selected
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+  2020-09-13 12:27:19 host-a             macb /tmp/file-39
+  2020-09-13 12:27:20 host-a             macb /tmp/file-40
+  2020-09-13 12:27:21 host-a             macb /tmp/file-41
+  2020-09-13 12:27:22 host-a             macb /tmp/file-42
+▌ 2020-09-13 12:27:23 host-a             macb /tmp/file-43
+  2020-09-13 12:27:24 host-a             macb /tmp/file-44
+  2020-09-13 12:27:25 host-a             macb /tmp/file-45
+  2020-09-13 12:27:26 host-a             macb /tmp/file-46
+  2020-09-13 12:27:27 host-a             macb /tmp/file-47
+  2020-09-13 12:27:28 host-a             macb /tmp/file-48
+
+After zb — event 43 stays selected
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+  2020-09-13 12:27:14 host-a             macb /tmp/file-34
+  2020-09-13 12:27:15 host-a             macb /tmp/file-35
+  2020-09-13 12:27:16 host-a             macb /tmp/file-36
+  2020-09-13 12:27:17 host-a             macb /tmp/file-37
+  2020-09-13 12:27:18 host-a             macb /tmp/file-38
+  2020-09-13 12:27:19 host-a             macb /tmp/file-39
+  2020-09-13 12:27:20 host-a             macb /tmp/file-40
+  2020-09-13 12:27:21 host-a             macb /tmp/file-41
+  2020-09-13 12:27:22 host-a             macb /tmp/file-42
+▌ 2020-09-13 12:27:23 host-a             macb /tmp/file-43

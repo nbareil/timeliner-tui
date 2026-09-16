@@ -35,9 +35,12 @@ const DELETE_MARK_PROMPT: &str = "Delete bookmark: type a–z (Esc cancels)";
 const HELP: &str = "\
 TIMELINER TUI
 
-↑/↓ scroll the view; the highlight stays in its screen slot.
+↑/↓ scroll the view, keeping the same event selected while visible.
+If it leaves the screen, the nearest visible event becomes selected.
 j/k move the highlight within the visible screen.
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
+zt/zz/zb put the selected event at the top/middle/bottom.
+z Enter / z. / z- do the same. Selection stays on the same event.
 TAB cycles a record's assessment. ENTER/F3 opens full details.
 Tags belong to source records, so all their MACB events agree.
 
@@ -81,10 +84,37 @@ enum Load {
     Replace,
     Filter(Option<EventKey>),
     FilterLast(Option<EventKey>),
-    Before(usize),
-    After(usize),
+    Before {
+        delta: usize,
+        keep_event: bool,
+    },
+    After {
+        delta: usize,
+        keep_event: bool,
+    },
     Last,
     Mark(EventKey, char),
+    Reposition {
+        focus: EventKey,
+        position: RowPosition,
+        reverse: bool,
+    },
+}
+#[derive(Clone, Copy)]
+enum RowPosition {
+    Top,
+    Middle,
+    Bottom,
+}
+impl RowPosition {
+    fn slot(self, height: usize) -> usize {
+        match self {
+            Self::Top => 0,
+            // Vim uses the upper middle row when the viewport height is even.
+            Self::Middle => height.saturating_sub(1) / 2,
+            Self::Bottom => height.saturating_sub(1),
+        }
+    }
 }
 struct Pending {
     generation: u64,
@@ -213,7 +243,13 @@ impl App {
             generation: self.generation,
             view: candidate.unwrap_or_else(|| self.view().clone()),
             anchor,
-            reverse: matches!(mode, Load::Before(_) | Load::Last | Load::FilterLast(_)),
+            reverse: matches!(
+                mode,
+                Load::Before { .. }
+                    | Load::Last
+                    | Load::FilterLast(_)
+                    | Load::Reposition { reverse: true, .. }
+            ),
             inclusive,
             limit,
         })
@@ -242,29 +278,81 @@ impl App {
         self.dirty_session = true;
         self.load(Load::Replace, None, self.view().top, true)
     }
-    fn scroll(&mut self, delta: isize) -> Option<Action> {
+    fn scroll_to(&mut self, top: usize, keep_event: bool) {
+        if keep_event {
+            self.view_mut().selected = (self.top + self.view().selected)
+                .saturating_sub(top)
+                .min(self.height.saturating_sub(1))
+                .min(self.rows.len().saturating_sub(top + 1));
+        }
+        self.top = top;
+    }
+    fn scroll(&mut self, delta: isize, keep_event: bool) -> Option<Action> {
         if delta > 0 {
             let room = self.rows.len().saturating_sub(self.top + self.height);
             if room > 0 {
-                self.top += room.min(delta as usize);
+                self.scroll_to(self.top + room.min(delta as usize), keep_event);
             } else if !self.end_after && self.pending.is_none() {
                 return Some(self.load(
-                    Load::After(delta as usize),
+                    Load::After {
+                        delta: delta as usize,
+                        keep_event,
+                    },
                     None,
                     self.rows.last().map(|r| r.key),
                     false,
                 ));
             }
         } else if self.top > 0 {
-            self.top = self.top.saturating_sub(delta.unsigned_abs());
+            self.scroll_to(self.top.saturating_sub(delta.unsigned_abs()), keep_event);
         } else if !self.end_before && self.pending.is_none() {
             return Some(self.load(
-                Load::Before(delta.unsigned_abs()),
+                Load::Before {
+                    delta: delta.unsigned_abs(),
+                    keep_event,
+                },
                 None,
                 self.rows.first().map(|r| r.key),
                 false,
             ));
         }
+        self.remember();
+        None
+    }
+    fn reposition(&mut self, position: RowPosition) -> Option<Action> {
+        if self.pending.is_some() {
+            self.status = "Loading… (Escape cancels)".into();
+            return None;
+        }
+        let Some(focus) = self.selected().map(|row| row.key) else {
+            self.status = "No matching events. F4 timeframe · F5 filters".into();
+            return None;
+        };
+        self.status = "Ready".into();
+        let index = self.top + self.view().selected;
+        let slot = position.slot(self.height);
+        let top = index.saturating_sub(slot);
+        let reverse = index < slot && !self.end_before;
+        if reverse || (top + self.height > self.rows.len() && !self.end_after) {
+            let anchor = if reverse {
+                self.rows.first()
+            } else {
+                self.rows.last()
+            }
+            .map(|row| row.key);
+            return Some(self.load(
+                Load::Reposition {
+                    focus,
+                    position,
+                    reverse,
+                },
+                None,
+                anchor,
+                false,
+            ));
+        }
+        self.top = top;
+        self.view_mut().selected = index - top;
         self.remember();
         None
     }
@@ -401,11 +489,15 @@ impl App {
                                 .min(self.rows.len().saturating_sub(1));
                         }
                     }
-                    Load::After(delta) => {
+                    Load::After { .. } | Load::Reposition { reverse: false, .. } => {
                         self.end_after = rows.len() < limit;
                         self.rows.append(&mut rows);
-                        self.top =
-                            (self.top + delta).min(self.rows.len().saturating_sub(self.height));
+                        if let Load::After { delta, keep_event } = mode {
+                            self.scroll_to(
+                                (self.top + delta).min(self.rows.len().saturating_sub(self.height)),
+                                keep_event,
+                            );
+                        }
                         if self.rows.len() > limit * 2 {
                             let discard = self.rows.len() - limit * 2;
                             self.rows.drain(..discard);
@@ -413,17 +505,28 @@ impl App {
                             self.end_before = false;
                         }
                     }
-                    Load::Before(delta) => {
+                    Load::Before { .. } | Load::Reposition { reverse: true, .. } => {
                         self.end_before = rows.len() < limit;
                         let added = rows.len();
                         rows.append(&mut self.rows);
                         self.rows = rows;
-                        self.top = (self.top + added).saturating_sub(delta);
+                        self.top += added;
+                        if let Load::Before { delta, keep_event } = mode {
+                            self.scroll_to(self.top.saturating_sub(delta), keep_event);
+                        }
                         if self.rows.len() > limit * 2 {
                             self.rows.truncate(limit * 2);
                             self.end_after = false;
                         }
                     }
+                }
+                if let Load::Reposition {
+                    focus, position, ..
+                } = mode
+                    && let Some(index) = self.rows.iter().position(|row| row.key == focus)
+                {
+                    self.top = index.saturating_sub(position.slot(self.height));
+                    self.view_mut().selected = index - self.top;
                 }
                 self.view_mut().selected = self
                     .view()
@@ -834,6 +937,21 @@ impl App {
         }
         if let Some(prefix) = self.prefix.take() {
             match (prefix, key.code) {
+                ('z', code) => {
+                    if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
+                        let position = match code {
+                            KeyCode::Char('t') | KeyCode::Enter => Some(RowPosition::Top),
+                            KeyCode::Char('z' | '.') => Some(RowPosition::Middle),
+                            KeyCode::Char('b' | '-') => Some(RowPosition::Bottom),
+                            _ => None,
+                        };
+                        if let Some(position) = position {
+                            return self.reposition(position).into_iter().collect();
+                        }
+                    }
+                    self.status = "Unknown z shortcut: use zt, zz, or zb".into();
+                    return vec![];
+                }
                 ('g', KeyCode::Char('g')) => {
                     return vec![self.load(Load::Replace, None, None, true)];
                 }
@@ -898,11 +1016,25 @@ impl App {
                 self.prefix = Some('d');
                 self.status = DELETE_MARK_PROMPT.into();
             }
+            KeyCode::Char('z') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
+                self.prefix = Some('z');
+                self.status = "z… top: t/Enter · middle: z/. · bottom: b/- (Esc cancels)".into();
+            }
             KeyCode::Char('G') => return vec![self.load(Load::Last, None, None, true)],
-            KeyCode::Up => return self.scroll(-1).into_iter().collect(),
-            KeyCode::Down => return self.scroll(1).into_iter().collect(),
-            KeyCode::PageUp => return self.scroll(-(self.height as isize)).into_iter().collect(),
-            KeyCode::PageDown => return self.scroll(self.height as isize).into_iter().collect(),
+            KeyCode::Up => return self.scroll(-1, true).into_iter().collect(),
+            KeyCode::Down => return self.scroll(1, true).into_iter().collect(),
+            KeyCode::PageUp => {
+                return self
+                    .scroll(-(self.height as isize), false)
+                    .into_iter()
+                    .collect();
+            }
+            KeyCode::PageDown => {
+                return self
+                    .scroll(self.height as isize, false)
+                    .into_iter()
+                    .collect();
+            }
             KeyCode::Char('j') => {
                 self.view_mut().selected = (self.view().selected + 1)
                     .min(self.height.saturating_sub(1))

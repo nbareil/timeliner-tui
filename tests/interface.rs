@@ -30,7 +30,7 @@ fn app() -> App {
     app
 }
 #[test]
-fn arrows_scroll_under_highlight_and_jk_never_scroll() {
+fn arrows_keep_the_same_event_selected_and_jk_never_scroll() {
     let mut app = app();
     for _ in 0..5 {
         key(&mut app, KeyCode::Char('j'));
@@ -39,7 +39,11 @@ fn arrows_scroll_under_highlight_and_jk_never_scroll() {
     assert_eq!(app.top, 0);
     key(&mut app, KeyCode::Down);
     assert_eq!(app.top, 1);
-    assert_eq!(app.session.views[0].selected, 5);
+    assert_eq!(app.session.views[0].selected, 4);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key.record,
+        5
+    );
     for _ in 0..20 {
         key(&mut app, KeyCode::Char('j'));
     }

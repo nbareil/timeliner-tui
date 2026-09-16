@@ -74,10 +74,12 @@ byte offset, original record, and matching rules.
 
 | Key | Action |
 | --- | --- |
-| ↑ / ↓ | Scroll one row underneath a fixed highlight |
+| ↑ / ↓ | Scroll one row, keeping the same event selected while it is visible |
 | j / k | Move the highlight within the visible screen |
 | Page Up / Page Down | Scroll a screen |
 | gg / G | Jump to the first / last matching event |
+| zt / zz / zb | Put the selected event at the top / middle / bottom |
+| z ENTER / z. / z- | Aliases for zt / zz / zb |
 | TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged |
 | ENTER / F3 | Record details |
 | F1 | Help |
@@ -97,6 +99,14 @@ byte offset, original record, and matching rules.
 | u | Remove the most recent exclusion |
 | D | Malformed-record diagnostics |
 | Escape | Close a dialog or cancel pending work |
+
+Arrow keys keep the same event highlighted as the timeline scrolls. If that
+event leaves the screen, selection moves to the nearest visible event.
+
+The `z` shortcuts scroll around the selected event without changing its identity.
+They load more rows when needed and stop at the beginning of the timeline if
+there are too few preceding events. Near the end, empty space can remain below
+the last event. Escape cancels a pending shortcut or page load.
 
 TAB tags the **whole original bodyfile record**. Its other timestamp events carry
 the same assessment in every tab. TAB switches fields when a dialog has focus.
@@ -252,6 +262,7 @@ nix develop path:.
 cargo run -- timeline.body
 cargo build --release --locked
 cargo test --locked
+cargo test --locked --test viewport
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 nix build path:.
