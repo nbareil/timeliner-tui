@@ -216,6 +216,7 @@ hidden tabs; the active tab stays visible.
 
 Use `ma` to set bookmark `a`, `'a` to jump to it, and `''` to return after a jump.
 Bookmarked events show a `●` in the left margin, including on the selected row.
+F8 lists each mark's date (`YYYY-MM-DD` in the selected timezone) and file path.
 Marks `a` through `z` persist. If the current filters hide a bookmarked event, a
 new unfiltered tab reveals it. Press `d` followed by the bookmark's letter (for
 example, `da`) to delete it from the timeline or the F8 list. Escape cancels a
@@ -522,8 +523,8 @@ or fold summaries; raw queries and exports continue to use `src/query.rs`.
 `src/navigation.rs` calculates timezone-aware boundaries and finds time or tag
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
-timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, or `goto`
-to preview dialogs, or `selection`, `directories`, and `zero-size` to preview
+timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, `marks`,
+or `goto` to preview dialogs, or `selection`, `directories`, and `zero-size` to preview
 timeline markers.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.

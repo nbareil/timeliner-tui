@@ -191,6 +191,9 @@ fn main() {
         Some("views") => {
             app.key(KeyEvent::new(KeyCode::F(7), KeyModifiers::NONE));
         }
+        Some("marks") => {
+            app.key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
+        }
         Some("delete-bookmark") => {
             app.key(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE));
             app.key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));

@@ -47,6 +47,33 @@ fn details(workers: &Workers, timezone: chrono_tz::Tz) -> String {
 }
 
 #[test]
+fn bookmark_paths_use_the_index_even_when_source_files_are_unavailable() {
+    let (dir, workers) = start(concat!(
+        "0|/sample/file|1|-rw-r--r--|0|0|10|100|200|300|400\n",
+        "0|/sample/directory|2|drwxr-xr-x|0|0|10|100|200|300|400\n",
+    ));
+    fs::remove_file(dir.path().join("source.body")).unwrap();
+    workers
+        .commands
+        .send(Command::BookmarkPaths(vec![1, 2, 999]))
+        .unwrap();
+    match workers
+        .messages
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap()
+    {
+        Message::BookmarkPaths(paths) => {
+            assert_eq!(paths[&1], "/sample/file");
+            assert_eq!(paths[&2], "/sample/directory/");
+            assert_eq!(paths[&999], "File entry unavailable");
+        }
+        Message::Error(error) => panic!("{error}"),
+        _ => panic!("Expected bookmark file entries"),
+    }
+    workers.shutdown();
+}
+
+#[test]
 fn detail_timestamps_use_iso_dates_and_the_requested_timezone_without_saving() {
     let original = "0|/sample|1|mode|0|0|10|1609459200|1625097600|0|-1\n";
     let (_dir, workers) = start(original);

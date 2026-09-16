@@ -226,6 +226,7 @@ pub struct App {
     mouse_enabled: bool,
     mouse_state: MouseState,
     selected_records: BTreeMap<i64, Row>,
+    bookmark_paths: BTreeMap<i64, String>,
 }
 
 impl Default for App {
@@ -249,6 +250,7 @@ impl Default for App {
             mouse_enabled: true,
             mouse_state: MouseState::default(),
             selected_records: BTreeMap::new(),
+            bookmark_paths: BTreeMap::new(),
         }
     }
 }
@@ -690,6 +692,33 @@ impl App {
             self.status = format!("Mark {name} is not set");
         }
     }
+    fn show_marks(&mut self) -> Vec<Action> {
+        self.modal = Some(Modal::Marks);
+        let records: BTreeSet<_> = self
+            .session
+            .bookmarks
+            .iter()
+            .map(|mark| mark.key.record)
+            .collect();
+        self.bookmark_paths.retain(|id, _| records.contains(id));
+        for row in self.rows.iter().filter_map(DisplayRow::event) {
+            if records.contains(&row.key.record) {
+                self.bookmark_paths.insert(
+                    row.key.record,
+                    display_path(&row.path, row.is_directory).into_owned(),
+                );
+            }
+        }
+        let missing: Vec<_> = records
+            .into_iter()
+            .filter(|id| !self.bookmark_paths.contains_key(id))
+            .collect();
+        if missing.is_empty() {
+            vec![]
+        } else {
+            vec![Action::Command(Command::BookmarkPaths(missing))]
+        }
+    }
     fn mark_jump(&mut self, name: char) -> Vec<Action> {
         let Some(mark) = self
             .session
@@ -732,6 +761,7 @@ impl App {
                 }
                 session.active = session.active.min(session.views.len() - 1);
                 self.session = session;
+                self.bookmark_paths.clear();
                 self.ready = true;
                 let action = self.load(Load::Replace, None, self.view().top, true);
                 if !warnings.is_empty() {
@@ -1053,6 +1083,19 @@ impl App {
             }
             Message::Detail(text) => {
                 self.modal = Some(Modal::Text("Record inspector", text, 0));
+                vec![]
+            }
+            Message::BookmarkPaths(paths) => {
+                for (id, path) in paths {
+                    if self
+                        .session
+                        .bookmarks
+                        .iter()
+                        .any(|mark| mark.key.record == id)
+                    {
+                        self.bookmark_paths.insert(id, path);
+                    }
+                }
                 vec![]
             }
             Message::Error(error) => {
@@ -1663,7 +1706,7 @@ impl App {
                 return vec![self.open_view(view)];
             }
             KeyCode::F(7) => self.modal = Some(Modal::Views),
-            KeyCode::F(8) => self.modal = Some(Modal::Marks),
+            KeyCode::F(8) => return self.show_marks(),
             KeyCode::F(9) => self.form(FormKind::Export),
             KeyCode::Char('D') => return vec![Action::Command(Command::Diagnostics)],
             KeyCode::Char('u') if key.modifiers.is_empty() => {

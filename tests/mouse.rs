@@ -454,8 +454,8 @@ fn wheel_scrolled_wrapped_bookmarks_jump_to_the_clicked_event() {
         mouse(&mut app, MouseEventKind::ScrollDown, 20, 9);
         draw(&mut app, &mut terminal);
     }
-    // The record number wraps onto a continuation line in this narrow dialog.
-    click_text(&mut app, &terminal, "25 ");
+    // The file entry wraps onto a continuation line in this narrow dialog.
+    click_text(&mut app, &terminal, "/mouse/event-0025");
     assert_eq!(selected(&app), 25);
     draw(&mut app, &mut terminal);
     assert!(matches!(

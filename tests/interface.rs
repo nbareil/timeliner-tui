@@ -358,6 +358,76 @@ fn bookmarks_and_return_jump() {
     assert_eq!(app.session.views[0].selected, 0);
     assert_eq!(app.session.bookmarks[0].key.record, 0);
 }
+
+#[test]
+fn bookmarks_show_local_dates_and_escaped_file_entries() {
+    for (timezone, epoch, date) in [
+        ("UTC", 1_609_459_200, "2021-01-01"),
+        ("America/New_York", 1_609_459_200, "2020-12-31"),
+        ("invalid", 1_609_459_200, "2021-01-01"),
+        ("UTC", i64::MAX, "9223372036854775807"),
+    ] {
+        let mut app = app();
+        app.session.timezone = timezone.into();
+        let row = app.rows[0].event_mut().unwrap();
+        row.key.epoch = epoch;
+        row.path = "/tmp/entry\nname".into();
+        row.is_directory = true;
+        key(&mut app, KeyCode::Char('m'));
+        key(&mut app, KeyCode::Char('a'));
+        assert!(key(&mut app, KeyCode::F(8)).is_empty());
+        let mut terminal = Terminal::new(TestBackend::new(144, 36)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let screen: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(
+            screen.contains(&format!(" a   {date}  /tmp/entry\\nname/")),
+            "{screen}"
+        );
+        assert!(!screen.contains("T00:00:00"));
+        assert!(!screen.contains("record 0"));
+    }
+}
+
+#[test]
+fn saved_bookmarks_resolve_file_entries_outside_the_current_page() {
+    use timeliner_tui::worker::Message;
+
+    let mut original = app();
+    key(&mut original, KeyCode::Char('m'));
+    key(&mut original, KeyCode::Char('a'));
+    let saved = serde_json::to_string(&original.session).unwrap();
+    let mut app = App::default();
+    app.message(Message::Ready(
+        serde_json::from_str(&saved).unwrap(),
+        String::new(),
+    ));
+    // Saved bookmarks contain only event keys, and the current page has no files.
+    let actions = key(&mut app, KeyCode::F(8));
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::Command(Command::BookmarkPaths(ids))] if ids == &[0]
+    ));
+    app.message(Message::BookmarkPaths([(0, "/tmp/file-0".into())].into()));
+    let mut terminal = Terminal::new(TestBackend::new(144, 36)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let screen: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(screen.contains(" a   2020-09-13  /tmp/file-0"), "{screen}");
+    key(&mut app, KeyCode::Esc);
+    assert!(key(&mut app, KeyCode::F(8)).is_empty());
+}
+
 #[test]
 fn delete_bookmark_shortcut_works_in_the_timeline_and_bookmark_dialog() {
     for in_dialog in [false, true] {

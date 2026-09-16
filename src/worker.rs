@@ -13,7 +13,9 @@ use crate::{
 use anyhow::Result;
 use chrono::TimeZone;
 use chrono_tz::Tz;
+use rusqlite::OptionalExtension;
 use std::{
+    collections::BTreeMap,
     path::PathBuf,
     sync::{
         Arc,
@@ -47,6 +49,7 @@ pub enum Command {
     Tag(i64, Option<Tag>),
     TagMany(Vec<i64>, Option<Tag>),
     Save(Session),
+    BookmarkPaths(Vec<i64>),
     Detail(i64, Tz),
     Diagnostics,
     Export(Export),
@@ -63,6 +66,7 @@ pub enum Message {
     Tagged(TagChange),
     TaggedMany(Vec<TagChange>),
     Changed,
+    BookmarkPaths(BTreeMap<i64, String>),
     Detail(String),
     Status(String),
     Error(String),
@@ -190,6 +194,24 @@ impl Workers {
                     let result = match command {
                         Command::Stop => break,
                         Command::Save(session) => store.save_session(&session),
+                        Command::BookmarkPaths(ids) => (|| -> Result<()> {
+                            let mut statement = store.conn.prepare_cached(
+                                "SELECT path,COALESCE(is_directory,0) FROM records WHERE id=?",
+                            )?;
+                            let mut paths = BTreeMap::new();
+                            for id in ids {
+                                let path = statement
+                                    .query_row([id], |row| {
+                                        let path: String = row.get(0)?;
+                                        Ok(display_path(&path, row.get(1)?).into_owned())
+                                    })
+                                    .optional()?
+                                    .unwrap_or_else(|| "File entry unavailable".into());
+                                paths.insert(id, path);
+                            }
+                            tx.send(Message::BookmarkPaths(paths))?;
+                            Ok(())
+                        })(),
                         Command::Tag(id, tag) => (|| -> Result<()> {
                             let revision = store.revision()?;
                             let change = store.set_tag(id, tag)?;

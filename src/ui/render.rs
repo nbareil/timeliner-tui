@@ -821,18 +821,21 @@ impl App {
                     .line_count(content.width);
                 let mut marks = Vec::new();
                 for mark in &self.session.bookmarks {
-                    let time = tz
+                    let date = tz
                         .timestamp_opt(mark.key.epoch, 0)
                         .single()
-                        .map(|t| t.to_rfc3339())
+                        .map(|t| t.format("%Y-%m-%d").to_string())
                         .unwrap_or_else(|| mark.key.epoch.to_string());
-                    let line = menu(
-                        &mark.name.to_string(),
-                        &time,
-                        &format!("record {}", mark.key.record),
-                        p.text,
-                        p,
-                    );
+                    let path = self
+                        .bookmark_paths
+                        .get(&mark.key.record)
+                        .map(String::as_str)
+                        .unwrap_or("Loading file entry…");
+                    let line = Line::from(vec![
+                        keycap(&mark.name.to_string(), p),
+                        label(format!("  {date}  "), p.text),
+                        label(display_text(path), p.muted),
+                    ]);
                     let height = Paragraph::new(line.clone())
                         .wrap(Wrap { trim: false })
                         .line_count(content.width);
