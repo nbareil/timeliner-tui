@@ -98,6 +98,14 @@ def main():
             def flag(name):
                 return command("display-message", "-p", "-t", pane, "#{" + name + "}")
 
+            def toggle_mouse(enabled):
+                os.write(master, b"\x1b[21~")  # F10
+                label = "Mouse on" if enabled else "Mouse off"
+                wait(lambda: label in capture(), label)
+                for name in ["mouse_any_flag", "mouse_button_flag", "mouse_sgr_flag"]:
+                    assert flag(name) == str(int(enabled)), f"{name} did not toggle"
+                assert flag("mouse_all_flag") == "0", "Hover reporting must stay off"
+
             def send_mouse(button, x, y, release=False):
                 # pane_top excludes the status line; the test deliberately puts
                 # that line at the top and the application in the right pane.
@@ -145,6 +153,10 @@ def main():
             click(250, 10)
             wait(lambda: "Record inspector" in capture(), "double-click inspection")
             assert "/mouse/event-0005" in capture()
+            toggle_mouse(False)
+            assert "Record inspector" in capture(), "F10 must preserve the open dialog"
+            toggle_mouse(True)
+            assert "Record inspector" in capture()
             click_label("Esc close")
             wait(lambda: "Record inspector" not in capture(), "closing the inspector")
 
@@ -170,14 +182,29 @@ def main():
             wait(lambda: int(flag("pane_width")) < initial_width, "tmux pane resize")
             click(int(flag("pane_width")) - 5, 8)
             wait(lambda: "/mouse/event-0003" in selected_path(), "selection after resize")
+            toggle_mouse(False)
+            before_copy = capture()
+            path = "/mouse/event-0005"
+            x = capture().splitlines()[10].index(path)
+            send_mouse(0, x, 10)
+            send_mouse(32, x + len(path), 10)
+            wait(lambda: flag("pane_in_mode") == "1", "tmux copy mode with mouse capture off")
+            send_mouse(0, x + len(path), 10, release=True)
+            wait(lambda: flag("pane_in_mode") == "0", "copying the selection")
+            assert path in command("show-buffer"), "The drag must copy timeline text"
+            assert capture() == before_copy, "Copying must not interact with the TUI"
             if os.environ.get("TIMELINER_TMUX_CAPTURE"):
                 Path(os.environ["TIMELINER_TMUX_CAPTURE"]).write_text(capture() + "\n")
+            toggle_mouse(True)
+            click(int(flag("pane_width")) - 5, 9)
+            wait(lambda: "/mouse/event-0004" in selected_path(), "mouse input after F10")
+            toggle_mouse(False)
 
             os.write(master, b"\x03")
             wait(lambda: "MOUSE_TEST_EXITED" in capture(), "normal exit")
             for name in ["mouse_any_flag", "mouse_button_flag", "mouse_all_flag", "mouse_sgr_flag", "alternate_on"]:
                 assert flag(name) == "0", f"{name} was not restored"
-            print(f"PASS: {command('-V')}; split pane, SGR >223, clicks, wheel, drag, tabs, resize, teardown")
+            print(f"PASS: {command('-V')}; split pane, SGR >223, clicks, wheel, drag, tabs, resize, F10, copying, teardown")
         finally:
             if socket.exists():
                 subprocess.run(

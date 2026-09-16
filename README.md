@@ -96,6 +96,7 @@ byte offset, original record, and matching rules.
 | gt / gT | Next / previous tab |
 | F8 | Bookmark list |
 | F9 | Export |
+| F10 | Toggle mouse capture for terminal text selection and copying |
 | q / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
 | c | Collapse a burst around the selected event; expand a selected summary |
@@ -224,7 +225,14 @@ See the [terminal capture](docs/images/bursts.txt), rendered from synthetic data
 
 ## Mouse and tmux
 
-Mouse support is enabled while the TUI is open:
+Mouse support is enabled by default. Press **F10** to turn it off for terminal
+text selection and copying without activating the TUI's controls. Press **F10**
+again to restore mouse support. The header shows **Mouse on** or **Mouse off**.
+The shortcut works in dialogs and while loading; keyboard controls remain
+available. Each launch starts with mouse support enabled.
+See the [terminal capture with mouse support disabled](docs/images/mouse-disabled.txt).
+
+With mouse support on:
 
 | Gesture | Action |
 | --- | --- |
@@ -258,8 +266,10 @@ Mouse modes are restored on exit, errors, and panics. Normal tmux mouse
 forwarding works without enabling passthrough.
 
 If custom tmux bindings intercept clicks or the wheel, they must forward events
-to applications with `send-keys -M` when `#{mouse_any_flag}` is set. For copying
-text, enter tmux copy mode with your prefix followed by `[`. Terminal selection
+to applications with `send-keys -M` when `#{mouse_any_flag}` is set. F10 releases
+the application's mouse capture, allowing tmux to handle selection. You can
+also enter tmux copy mode with your prefix followed by `[`. Leave copy mode
+before pressing F10 to restore application mouse support. Terminal selection
 overrides, often Shift, depend on your terminal.
 
 ## Time and path filters
@@ -420,7 +430,8 @@ Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It
 sends mouse input through a real tmux client into a split pane and verifies
-selection, scrolling, inspection, tab switching, resizing, and terminal cleanup.
+selection, scrolling, inspection, tab switching, resizing, F10 toggling, copying
+text with mouse capture off, and terminal cleanup.
 
 ## Performance and current boundaries
 

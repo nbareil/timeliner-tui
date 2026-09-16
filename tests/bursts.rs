@@ -663,7 +663,7 @@ fn folded_summary_renders_counts_time_range_and_the_new_quit_control() {
                 .collect::<Vec<_>>()
                 .join("\n");
             assert!(text.contains("580 events"), "{text}");
-            assert!(!text.contains("F10"));
+            assert!(text.contains("F10") && text.contains("Mouse on"), "{text}");
             if width >= 120 {
                 assert!(text.contains("host-b"));
             }

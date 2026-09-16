@@ -1,4 +1,6 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::{Terminal, backend::TestBackend};
 use timeliner_tui::{
     model::{Bookmark, DisplayRow, EventKey, Row, Session, Tag, View},
@@ -93,6 +95,148 @@ fn selected(app: &App) -> i64 {
     app.rows[app.top + app.session.views[app.session.active].selected]
         .key()
         .record
+}
+
+#[test]
+fn f10_disables_mouse_controls_and_restores_them_without_changing_the_view() {
+    for width in [42, 80, 120, 300] {
+        let (mut app, mut terminal) = setup(width, 24, 128);
+        click(&mut app, 20, 8);
+        assert!(matches!(
+            key(&mut app, KeyCode::F(10)).as_slice(),
+            [Action::MouseCapture(false)]
+        ));
+        draw(&mut app, &mut terminal);
+        locate(&terminal, "F10");
+        locate(&terminal, "Mouse off");
+        let before = terminal.backend().buffer().clone();
+        for kind in [
+            MouseEventKind::Down(MouseButton::Left),
+            MouseEventKind::Down(MouseButton::Right),
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::ScrollUp,
+            MouseEventKind::ScrollDown,
+        ] {
+            assert!(mouse(&mut app, kind, 20, 10).is_empty());
+        }
+        for label in ["2 IOC", "F6", "F10", "q "] {
+            assert!(click_text(&mut app, &terminal, label).is_empty());
+        }
+        draw(&mut app, &mut terminal);
+        assert_eq!(terminal.backend().buffer(), &before);
+        assert_eq!(selected(&app), 3);
+        assert_eq!(app.top, 0);
+
+        key(&mut app, KeyCode::Char('j'));
+        assert_eq!(selected(&app), 4);
+        assert!(matches!(
+            key(&mut app, KeyCode::F(10)).as_slice(),
+            [Action::MouseCapture(true)]
+        ));
+        draw(&mut app, &mut terminal);
+        locate(&terminal, "Mouse on");
+        assert!(click(&mut app, 20, 10).is_empty());
+        assert_eq!(selected(&app), 5);
+        mouse(&mut app, MouseEventKind::ScrollDown, 20, 10);
+        assert_eq!(app.top, 3);
+    }
+}
+
+#[test]
+fn f10_preserves_dialogs_and_blocks_their_mouse_controls() {
+    for function in [1, 2, 3, 4, 5, 7, 8, 9] {
+        let (mut app, mut terminal) = setup(120, 30, 128);
+        if function == 3 {
+            app.message(Message::Detail(
+                (0..100).map(|i| format!("Detail line {i:03}\n")).collect(),
+            ));
+        } else {
+            key(&mut app, KeyCode::F(function));
+        }
+        assert!(matches!(
+            key(&mut app, KeyCode::F(10)).as_slice(),
+            [Action::MouseCapture(false)]
+        ));
+        draw(&mut app, &mut terminal);
+        locate(&terminal, "Mouse off");
+        let before = terminal.backend().buffer().clone();
+        click_text(&mut app, &terminal, "Esc close");
+        for kind in [
+            MouseEventKind::Down(MouseButton::Left),
+            MouseEventKind::Down(MouseButton::Right),
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::ScrollDown,
+        ] {
+            assert!(mouse(&mut app, kind, 60, 15).is_empty());
+        }
+        draw(&mut app, &mut terminal);
+        assert_eq!(terminal.backend().buffer(), &before);
+        assert!(matches!(
+            key(&mut app, KeyCode::F(10)).as_slice(),
+            [Action::MouseCapture(true)]
+        ));
+        draw(&mut app, &mut terminal);
+        locate(&terminal, "Mouse on");
+        locate(&terminal, "Esc close");
+        click_text(&mut app, &terminal, "Esc close");
+        draw(&mut app, &mut terminal);
+        click(&mut app, 20, 8);
+        assert_eq!(selected(&app), 3);
+    }
+}
+
+#[test]
+fn f10_preserves_loading_and_pending_keyboard_commands() {
+    let mut app = App::default();
+    let status = app.status.clone();
+    assert!(matches!(
+        key(&mut app, KeyCode::F(10)).as_slice(),
+        [Action::MouseCapture(false)]
+    ));
+    assert_eq!(app.status, status);
+    let actions = app.message(Message::Ready(Session::default(), String::new()));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    app.message(Message::Page(request.generation, rows(0, 128)));
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    draw(&mut app, &mut terminal);
+    locate(&terminal, "Mouse off");
+    key(&mut app, KeyCode::Char('m'));
+    let prompt = app.status.clone();
+    assert!(matches!(
+        key(&mut app, KeyCode::F(10)).as_slice(),
+        [Action::MouseCapture(true)]
+    ));
+    assert_eq!(app.status, prompt);
+    key(&mut app, KeyCode::Char('a'));
+    assert_eq!(app.session.bookmarks[0].name, 'a');
+    assert_eq!(app.session.bookmarks[0].key.record, 0);
+}
+
+#[test]
+fn mouse_toggle_ignores_key_repeats_and_releases_and_is_clickable() {
+    let (mut app, mut terminal) = setup(120, 30, 128);
+    assert!(matches!(
+        click_text(&mut app, &terminal, "F10").as_slice(),
+        [Action::MouseCapture(false)]
+    ));
+    for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+        assert!(
+            app.key(KeyEvent::new_with_kind(
+                KeyCode::F(10),
+                KeyModifiers::NONE,
+                kind,
+            ))
+            .is_empty()
+        );
+    }
+    draw(&mut app, &mut terminal);
+    locate(&terminal, "Mouse off");
+    assert!(matches!(
+        key(&mut app, KeyCode::F(10)).as_slice(),
+        [Action::MouseCapture(true)]
+    ));
 }
 
 #[test]

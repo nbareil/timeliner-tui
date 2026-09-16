@@ -46,6 +46,9 @@ impl App {
     }
 
     fn mouse_at(&mut self, event: MouseEvent, now: Instant) -> Vec<Action> {
+        if !self.mouse_enabled {
+            return vec![];
+        }
         let point = Position::new(event.column, event.row);
         if !event.modifiers.is_empty() || self.modal.is_some() != self.mouse_state.modal.is_some() {
             self.mouse_state.last_click = None;

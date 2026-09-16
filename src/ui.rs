@@ -48,6 +48,7 @@ j/k select the next/previous event, scrolling one row at screen edges.
 Mouse: wheel scrolls; click/drag selects; double-click/right-click inspects.
 Click tabs, function buttons, menu choices, and form fields.
 Mouse wheel scrolls details/help/bookmarks or moves between form fields.
+F10 toggles mouse capture for terminal text selection and copying, even in dialogs.
 Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
 nm/nh/nd/nM/ny jump to the next minute/hour/day/month/year and center it.
@@ -64,6 +65,7 @@ Tags belong to source records, so all their MACB events agree.
 F1 Help   F2 Tags / reload IOC rules   F3 Details
 F4 Timeframe   F5 Filters   F6 Fork view   F7 Smart tabs
 F8 Bookmarks   F9 Export   q Quit (also Ctrl+C)
+F10 switches mouse support off/on.
 F11 switches between light and dark themes.
 1–9 select tabs directly; gt/gT switch tabs.
 Smart tabs start across the whole investigation.
@@ -179,6 +181,7 @@ enum Modal {
 pub enum Action {
     Page(PageRequest),
     Command(Command),
+    MouseCapture(bool),
     Cancel,
     Quit,
 }
@@ -199,6 +202,7 @@ pub struct App {
     end_before: bool,
     end_after: bool,
     dirty_session: bool,
+    mouse_enabled: bool,
     mouse_state: MouseState,
 }
 
@@ -220,6 +224,7 @@ impl Default for App {
             end_before: false,
             end_after: false,
             dirty_session: false,
+            mouse_enabled: true,
             mouse_state: MouseState::default(),
         }
     }
@@ -1092,6 +1097,13 @@ impl App {
             return vec![];
         }
         self.mouse_state.reset_click();
+        if key.code == KeyCode::F(10) && key.modifiers.is_empty() {
+            if key.kind == KeyEventKind::Press {
+                self.mouse_enabled = !self.mouse_enabled;
+                return vec![Action::MouseCapture(self.mouse_enabled)];
+            }
+            return vec![];
+        }
         if (key.code == KeyCode::Char('q')
             && key.modifiers.is_empty()
             && self.prefix.is_none()
@@ -1532,6 +1544,22 @@ fn expand_home(value: &str) -> PathBuf {
 }
 
 struct TerminalGuard;
+fn set_mouse_capture(enabled: bool) -> io::Result<()> {
+    if enabled {
+        execute!(io::stdout(), EnableMouseCapture)?;
+        // Keep SGR coordinates, including columns beyond 223, but only report
+        // motion while a button is held to limit traffic through tmux and SSH.
+        #[cfg(unix)]
+        execute!(
+            io::stdout(),
+            crossterm::style::Print("\x1b[?1003l\x1b[?1002h")
+        )?;
+    } else {
+        execute!(io::stdout(), DisableMouseCapture)?;
+    }
+    Ok(())
+}
+
 fn restore_terminal() {
     let _ = execute!(
         io::stdout(),
@@ -1552,14 +1580,8 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
     }
     enable_raw_mode()?;
     let _guard = TerminalGuard;
-    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
-    // Keep SGR coordinates, including columns beyond 223, but only report
-    // motion while a button is held to limit traffic through tmux and SSH.
-    #[cfg(unix)]
-    execute!(
-        io::stdout(),
-        crossterm::style::Print("\x1b[?1003l\x1b[?1002h")
-    )?;
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    set_mouse_capture(true)?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         restore_terminal();
@@ -1583,13 +1605,14 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
                     dirty = true;
                 }
                 Event::Mouse(mouse)
-                    if matches!(
-                        mouse.kind,
-                        MouseEventKind::Down(_)
-                            | MouseEventKind::Drag(_)
-                            | MouseEventKind::ScrollUp
-                            | MouseEventKind::ScrollDown
-                    ) =>
+                    if app.mouse_enabled
+                        && matches!(
+                            mouse.kind,
+                            MouseEventKind::Down(_)
+                                | MouseEventKind::Drag(_)
+                                | MouseEventKind::ScrollUp
+                                | MouseEventKind::ScrollDown
+                        ) =>
                 {
                     actions.extend(app.mouse(mouse));
                     dirty = true;
@@ -1605,6 +1628,7 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
                     workers.pages.send(request)?;
                 }
                 Action::Command(command) => workers.commands.send(command)?,
+                Action::MouseCapture(enabled) => set_mouse_capture(enabled)?,
                 Action::Cancel => workers.cancel(),
                 Action::Quit => return Ok(()),
             }

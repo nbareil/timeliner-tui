@@ -31,6 +31,7 @@ impl App {
         let cells = Layout::horizontal([
             Constraint::Length(brand_width),
             Constraint::Fill(1),
+            Constraint::Length(16),
             Constraint::Length(theme_width),
         ])
         .split(masthead);
@@ -60,16 +61,32 @@ impl App {
             ])),
             cells[1],
         );
+        self.mouse_state
+            .target(cells[2], MouseTarget::Key(KeyCode::F(10)));
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                keycap("F10", p),
+                label(
+                    if self.mouse_enabled {
+                        " Mouse on "
+                    } else {
+                        " Mouse off "
+                    },
+                    if self.mouse_enabled { p.teal } else { p.amber },
+                ),
+            ])),
+            cells[2],
+        );
         if theme_width > 0 {
             self.mouse_state
-                .target(cells[2], MouseTarget::Key(KeyCode::F(11)));
+                .target(cells[3], MouseTarget::Key(KeyCode::F(11)));
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     keycap("F11", p),
                     label(format!(" {} ", self.session.theme.label()), p.muted),
                 ]))
                 .alignment(Alignment::Right),
-                cells[2],
+                cells[3],
             );
         }
         if area.height < 2 {

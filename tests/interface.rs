@@ -86,7 +86,10 @@ fn tab_tags_record_and_enter_requests_details() {
 #[test]
 fn q_saves_and_quits_while_f10_no_longer_quits() {
     let mut app = app();
-    assert!(key(&mut app, KeyCode::F(10)).is_empty());
+    assert!(matches!(
+        key(&mut app, KeyCode::F(10)).as_slice(),
+        [Action::MouseCapture(false)]
+    ));
     assert!(matches!(
         key(&mut app, KeyCode::Char('q')).as_slice(),
         [Action::Command(Command::Save(_)), Action::Quit]
