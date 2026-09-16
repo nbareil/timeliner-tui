@@ -86,6 +86,7 @@ byte offset, original record, and matching rules.
 | F5 / `/` | Path, host, timestamp-type, and bogus-time filters |
 | F6 | Fork the current view |
 | F7 | Global smart tabs; rename or close a tab |
+| 1–9 (with Shift if needed) | Select tab by number |
 | gt / gT | Next / previous tab |
 | F8 | Bookmark list |
 | F9 | Export |
@@ -99,15 +100,21 @@ TAB tags the **whole original bodyfile record**. Its other timestamp events carr
 the same assessment in every tab. TAB switches fields when a dialog has focus.
 Forms support Ctrl+U to clear a field; F2 adds an exclusion in the filter editor.
 
+New workspaces start with Timeline and IOC tabs. The IOC tab shows records whose
+current assessment is IOC across the whole investigation. Saved workspaces
+restore their existing tabs.
+
 Forking copies the current filters and location. The new tab is independent.
 Smart tabs—All tagged, SUSPICIOUS, IOC, and MALICIOUS—start across the whole
 investigation and update when tags change.
 
 The header shows numbered tabs, marks the active tab with `●`, and displays its
-position (for example, `Tab 2/4`). Use `gt`/`gT` to switch. When titles exceed the
-screen width, `<` and `>` indicate hidden tabs; the active tab stays visible.
+position (for example, `Tab 2/4`). Use `1`–`9` to select a tab directly or `gt`/`gT`
+to switch in order. When titles exceed the screen width, `<` and `>` indicate
+hidden tabs; the active tab stays visible.
 
 Use `ma` to set bookmark `a`, `'a` to jump to it, and `''` to return after a jump.
+Bookmarked events show a `●` in the left margin, including on the selected row.
 Marks `a` through `z` persist. If the current filters hide a bookmarked event, a
 new unfiltered tab reveals it. In F8, press `d` followed by a letter to delete a
 mark. Text registers and yank commands are not implemented.
@@ -120,8 +127,9 @@ unbounded; a date-only begin means midnight and a date-only end includes the
 entire day. Ambiguous or nonexistent local times are rejected.
 
 ENTER/F3 displays all four record timestamps in ISO 8601 format with the selected
-timezone's offset, for example `2026-09-16T12:34:56+00:00`. The original bodyfile
-line remains available below the formatted details.
+timezone's offset, for example `2026-09-16T12:34:56+00:00`. All formatted field
+values share one column. The original bodyfile line remains available below the
+formatted details.
 
 ```sh
 nix run path:. -- --after 2026-09-01 --before 2026-09-03 \

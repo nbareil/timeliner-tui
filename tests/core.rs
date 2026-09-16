@@ -505,6 +505,45 @@ fn uac_hostname_and_explicit_legacy_mode() {
 }
 
 #[test]
+fn default_ioc_tab_tracks_assessments_independently_of_the_timeline() {
+    let content = format!(
+        "{}\n{}\n{}",
+        line("/evil", "1|2|3|4"),
+        line("/review", "5|6|7|8"),
+        line("/clean", "9|10|11|12")
+    );
+    let (_dir, mut store) = setup(&[content.as_bytes()]);
+    store
+        .reload_rules(&Rules::from_yaml("- path: /evil").unwrap(), |_| true)
+        .unwrap();
+    let mut session = store.session().unwrap();
+    assert_eq!(session.active, 0);
+    assert_eq!(session.views.len(), 2);
+    assert_eq!(session.views[0].name, "Timeline");
+    assert_eq!(session.views[1].name, "IOC");
+    assert_eq!(rows(&store, &session.views[0]).len(), 12);
+
+    session.views[0].after = Some(100);
+    session.views[0].predicate.exclude.push("/evil".into());
+    let ioc = &session.views[1];
+    let matches = rows(&store, ioc);
+    assert_eq!(matches.len(), 4);
+    assert!(matches.iter().all(|row| row.path == "/evil"));
+    tag(&store, 2, Some(Tag::Ioc));
+    assert_eq!(rows(&store, ioc).len(), 8);
+    tag(&store, 1, Some(Tag::Malicious));
+    let matches = rows(&store, ioc);
+    assert_eq!(matches.len(), 4);
+    assert!(matches.iter().all(|row| row.path == "/review"));
+
+    session.views.pop();
+    store.save_session(&session).unwrap();
+    let restored = store.session().unwrap();
+    assert_eq!(restored.views.len(), 1);
+    assert_eq!(restored.views[0].after, Some(100));
+}
+
+#[test]
 fn session_round_trip_preserves_independent_tabs_marks_and_location() {
     let (_dir, store) = setup(&[]);
     let view = View {

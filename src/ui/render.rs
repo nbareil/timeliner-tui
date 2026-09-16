@@ -56,7 +56,7 @@ impl App {
                     ),
                     p.text,
                 ),
-                label("gt/gT switch", p.muted),
+                label("1–9 select · gt/gT switch", p.muted),
             ])),
             cells[1],
         );
@@ -238,8 +238,16 @@ impl App {
             let base = p.base().bg(background);
             fill(frame, area, base);
             let cells = Layout::horizontal(widths).spacing(1).split(area);
-            if selected {
-                frame.render_widget(Paragraph::new("▌").style(base.fg(p.accent)), cells[0]);
+            let bookmarked = self
+                .session
+                .bookmarks
+                .iter()
+                .any(|mark| mark.key == row.key);
+            if bookmarked || selected {
+                frame.render_widget(
+                    Paragraph::new(if bookmarked { "●" } else { "▌" }).style(base.fg(p.accent)),
+                    cells[0],
+                );
             }
             let timestamp = tz
                 .timestamp_opt(row.key.epoch, 0)
@@ -463,7 +471,17 @@ impl App {
             inner.height.saturating_sub(2),
         );
         match modal {
-            Modal::Text(_, text, scroll) => {
+            Modal::Text(title, text, scroll) => {
+                let field_width = if *title == "Record inspector" {
+                    text.lines()
+                        .take_while(|line| !line.starts_with("Original record"))
+                        .filter_map(|line| line.split_once(": "))
+                        .map(|(name, _)| name.len() + 1)
+                        .max()
+                        .unwrap_or_default()
+                } else {
+                    0
+                };
                 let mut raw = false;
                 let lines = text
                     .lines()
@@ -473,16 +491,11 @@ impl App {
                         }
                         let safe = display_text(line);
                         if !raw && let Some((name, value)) = safe.split_once(": ") {
+                            let is_time = name.ends_with("time");
+                            let field = format!("{name}:");
                             Line::from(vec![
-                                label(format!("{name}: "), p.muted),
-                                label(
-                                    value.to_string(),
-                                    if name.ends_with("time") {
-                                        p.accent
-                                    } else {
-                                        p.text
-                                    },
-                                ),
+                                label(format!("{field:<field_width$} "), p.muted),
+                                label(value.to_string(), if is_time { p.accent } else { p.text }),
                             ])
                         } else {
                             Line::from(label(safe, if raw { p.muted } else { p.text }))
@@ -537,7 +550,7 @@ impl App {
                     menu("x", "Close current view", "", p.text, p),
                     Line::from(""),
                     Line::from(label(
-                        "F6 forks this view. gt / gT moves between views.",
+                        "F6 forks this view. 1–9 selects a tab; gt / gT switches tabs.",
                         p.muted,
                     )),
                 ];

@@ -43,10 +43,12 @@ F1 Help   F2 Tags / reload IOC rules   F3 Details
 F4 Timeframe   F5 Filters   F6 Fork view   F7 Smart tabs
 F8 Bookmarks   F9 Export   F10 Quit
 F11 switches between light and dark themes.
-gt/gT switch tabs. Smart tabs start across the whole investigation.
+1–9 select tabs directly; gt/gT switch tabs.
+Smart tabs start across the whole investigation.
 F7 also offers rename/close. F6 copies filters and location.
 
 ma sets mark a; 'a jumps to it; '' returns after a jump.
+● in the left margin marks a bookmarked event.
 If a mark is hidden, a new unfiltered view reveals it.
 F8 lists marks; d then a letter deletes a mark in that dialog.
 No Vim text registers are implemented.
@@ -744,6 +746,14 @@ impl App {
             }
         }
         match key.code {
+            KeyCode::Char(number @ '1'..='9')
+                if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() =>
+            {
+                let active = (number as u8 - b'1') as usize;
+                if active < self.session.views.len() && active != self.session.active {
+                    return vec![self.switch(active)];
+                }
+            }
             KeyCode::Char('g' | 'm' | '\'') => {
                 if let KeyCode::Char(c) = key.code {
                     self.prefix = Some(c);

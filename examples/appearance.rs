@@ -8,7 +8,7 @@ use ratatui::{
 };
 use serde_json::json;
 use timeliner_tui::{
-    model::{EventKey, Row, Tag, View},
+    model::{Bookmark, EventKey, Row, Tag, View},
     theme::Theme,
     ui::App,
     worker::Message,
@@ -94,6 +94,16 @@ fn main() {
             ioc_match: matches!(i, 5 | 7 | 15),
         })
         .collect();
+    app.session.bookmarks = vec![
+        Bookmark {
+            name: 'a',
+            key: app.rows[3].key,
+        },
+        Bookmark {
+            name: 'b',
+            key: app.rows[7].key,
+        },
+    ];
     match args.get(1).map(String::as_str) {
         Some("details") => {
             app.message(Message::Detail(

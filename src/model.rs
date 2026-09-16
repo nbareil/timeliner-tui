@@ -113,7 +113,17 @@ pub struct Session {
 impl Default for Session {
     fn default() -> Self {
         Self {
-            views: vec![View::default()],
+            views: vec![
+                View::default(),
+                View {
+                    name: "IOC".into(),
+                    predicate: Predicate {
+                        tags: Some(vec![Tag::Ioc]),
+                        ..Predicate::default()
+                    },
+                    ..View::default()
+                },
+            ],
             active: 0,
             bookmarks: Vec::new(),
             timezone: "UTC".into(),

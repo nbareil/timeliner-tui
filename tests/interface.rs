@@ -78,16 +78,99 @@ fn fork_copies_filters_but_smart_tab_is_global() {
     app.session.views[0].after = Some(100);
     app.session.views[0].predicate.exclude.push("/tmp".into());
     key(&mut app, KeyCode::F(6));
-    assert_eq!(app.session.views.len(), 2);
-    assert_eq!(app.session.views[1].after, Some(100));
-    app.session.views[1].predicate.exclude.push("other".into());
+    assert_eq!(app.session.views.len(), 3);
+    assert_eq!(app.session.views[2].after, Some(100));
+    app.session.views[2].predicate.exclude.push("other".into());
     assert_eq!(app.session.views[0].predicate.exclude.len(), 1);
     key(&mut app, KeyCode::F(7));
     key(&mut app, KeyCode::Char('3'));
-    let view = &app.session.views[2];
+    let view = &app.session.views[3];
     assert_eq!(view.after, None);
     assert!(view.predicate.exclude.is_empty());
     assert_eq!(view.predicate.tags, Some(vec![Tag::Ioc]));
+}
+
+#[test]
+fn number_keys_select_tabs_and_ignore_current_or_missing_tabs() {
+    let mut app = app();
+    app.session.views.push(View {
+        name: "Third".into(),
+        ..View::default()
+    });
+    let original_rows = app.rows.clone();
+    let original_top = original_rows[0].key;
+    assert!(key(&mut app, KeyCode::Char('1')).is_empty());
+    assert!(key(&mut app, KeyCode::Char('9')).is_empty());
+    assert_eq!(app.session.active, 0);
+    assert_eq!(app.rows.len(), original_rows.len());
+
+    for (number, active) in [('2', 1), ('3', 2), ('1', 0)] {
+        let actions = key(&mut app, KeyCode::Char(number));
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Selecting tab {number} must load its view");
+        };
+        assert_eq!(app.session.active, active);
+        assert_eq!(request.view.name, app.session.views[active].name);
+        if number == '2' {
+            assert_eq!(request.view.predicate.tags, Some(vec![Tag::Ioc]));
+        }
+        if number == '1' {
+            assert_eq!(request.anchor, Some(original_top));
+        }
+        app.message(timeliner_tui::worker::Message::Page(
+            request.generation,
+            original_rows.clone(),
+        ));
+    }
+}
+
+#[test]
+fn shifted_number_keys_select_tabs() {
+    let mut app = app();
+    app.session.views = (1..=9)
+        .map(|number| View {
+            name: format!("Tab {number}"),
+            ..View::default()
+        })
+        .collect();
+    for number in ['2', '3', '4', '5', '6', '7', '8', '9', '1'] {
+        let actions = app.key(KeyEvent::new(KeyCode::Char(number), KeyModifiers::SHIFT));
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Shift+{number} must select its tab");
+        };
+        assert_eq!(app.session.active, number as usize - '1' as usize);
+        assert_eq!(request.view.name, format!("Tab {number}"));
+    }
+    for modifiers in [
+        KeyModifiers::CONTROL,
+        KeyModifiers::ALT,
+        KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        KeyModifiers::ALT | KeyModifiers::SHIFT,
+    ] {
+        assert!(
+            app.key(KeyEvent::new(KeyCode::Char('2'), modifiers))
+                .is_empty()
+        );
+        assert_eq!(app.session.active, 0);
+    }
+}
+
+#[test]
+fn number_keys_keep_their_dialog_actions() {
+    for (number, tag) in [
+        ('1', Tag::Suspicious),
+        ('2', Tag::Ioc),
+        ('3', Tag::Malicious),
+    ] {
+        let mut app = app();
+        key(&mut app, KeyCode::F(2));
+        let actions = key(&mut app, KeyCode::Char(number));
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::Command(Command::Tag(0, Some(actual)))] if *actual == tag
+        ));
+        assert_eq!(app.session.active, 0);
+    }
 }
 
 #[test]
@@ -119,6 +202,7 @@ fn tab_names_active_marker_and_position_remain_visible_when_switching() {
             "{position}"
         );
         assert!(position.contains("gt/gT switch"), "{position}");
+        assert!(position.contains("1–9 select"), "{position}");
         let marker = (0..120).find(|&x| buffer[(x, 1)].symbol() == "●").unwrap();
         assert_eq!(buffer[(marker, 1)].bg, app.session.theme.palette().selected);
         assert_eq!(buffer[(marker, 1)].fg, app.session.theme.palette().accent);
@@ -202,6 +286,50 @@ fn bookmarks_and_return_jump() {
     assert_eq!(app.session.views[0].selected, 0);
     assert_eq!(app.session.bookmarks[0].key.record, 0);
 }
+#[test]
+fn bookmark_markers_follow_exact_events_and_update_after_reassignment_and_deletion() {
+    for theme in [
+        timeliner_tui::theme::Theme::Light,
+        timeliner_tui::theme::Theme::Dark,
+    ] {
+        for width in [60, 80, 120] {
+            let mut app = app();
+            app.session.theme = theme;
+            app.rows[1].key.record = app.rows[0].key.record;
+            app.rows[2].key.epoch = app.rows[0].key.epoch;
+            let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+            key(&mut app, KeyCode::Char('m'));
+            key(&mut app, KeyCode::Char('a'));
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let buffer = terminal.backend().buffer();
+            assert_eq!(buffer[(0, 5)].symbol(), "●");
+            assert_eq!(buffer[(0, 5)].bg, theme.palette().selected);
+            assert_eq!(buffer[(0, 6)].symbol(), " ");
+            assert_eq!(buffer[(0, 7)].symbol(), " ");
+
+            key(&mut app, KeyCode::Char('j'));
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            assert_eq!(terminal.backend().buffer()[(0, 5)].symbol(), "●");
+            assert_eq!(terminal.backend().buffer()[(0, 6)].symbol(), "▌");
+            for name in ['a', 'b'] {
+                key(&mut app, KeyCode::Char('m'));
+                key(&mut app, KeyCode::Char(name));
+            }
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            assert_eq!(terminal.backend().buffer()[(0, 5)].symbol(), " ");
+            assert_eq!(terminal.backend().buffer()[(0, 6)].symbol(), "●");
+            for (name, marker) in [('a', "●"), ('b', "▌")] {
+                key(&mut app, KeyCode::F(8));
+                key(&mut app, KeyCode::Char('d'));
+                key(&mut app, KeyCode::Char(name));
+                key(&mut app, KeyCode::Esc);
+                terminal.draw(|frame| app.draw(frame)).unwrap();
+                assert_eq!(terminal.backend().buffer()[(0, 6)].symbol(), marker);
+            }
+        }
+    }
+}
+
 #[test]
 fn tag_is_right_aligned_and_keys_survive_standard_terminal_resize() {
     let mut app = app();
@@ -457,6 +585,51 @@ fn errors_from_old_queries_do_not_discard_newer_results() {
 }
 
 #[test]
+fn detail_values_and_iso_timestamps_start_in_the_same_column() {
+    let fields = [
+        ("Host", "sample-host"),
+        ("Hash / original first field", "original-hash"),
+        ("Access time", "2026-09-08T09:14:19+00:00"),
+        ("Modification time", "2026-09-08T09:14:20+00:00"),
+        ("Change time", "2026-09-08T09:14:22+00:00"),
+        ("Birth time", "2026-09-08T09:14:17+00:00"),
+    ];
+    for theme in [
+        timeliner_tui::theme::Theme::Light,
+        timeliner_tui::theme::Theme::Dark,
+    ] {
+        for width in [64, 80, 120] {
+            let mut app = app();
+            app.session.theme = theme;
+            app.message(timeliner_tui::worker::Message::Detail(
+                fields
+                    .iter()
+                    .map(|(name, value)| format!("{name}: {value}\n"))
+                    .collect(),
+            ));
+            let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let lines = terminal
+                .backend()
+                .buffer()
+                .content
+                .chunks(width as usize)
+                .map(|line| line.iter().map(|cell| cell.symbol()).collect::<String>())
+                .collect::<Vec<_>>();
+            let columns = fields.map(|(name, value)| {
+                let line = lines.iter().find(|line| line.contains(name)).unwrap();
+                let offset = line.find(value).expect("Field value must be visible");
+                line[..offset].chars().count()
+            });
+            assert!(
+                columns.iter().all(|column| *column == columns[0]),
+                "{theme:?} at width {width}: {columns:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn long_wrapped_details_can_be_scrolled_to_the_end() {
     let mut app = app();
     app.message(timeliner_tui::worker::Message::Detail(format!(
@@ -493,7 +666,7 @@ fn jump_back_after_closing_its_tab_does_not_replace_another_tab() {
         request.generation,
         saved_rows,
     ));
-    app.session.views[1].name = "Return target".into();
+    app.session.views[2].name = "Return target".into();
     key(&mut app, KeyCode::Char('\''));
     key(&mut app, KeyCode::Char('a'));
     key(&mut app, KeyCode::F(6));
@@ -501,12 +674,14 @@ fn jump_back_after_closing_its_tab_does_not_replace_another_tab() {
     key(&mut app, KeyCode::Char('t'));
     key(&mut app, KeyCode::Char('g'));
     key(&mut app, KeyCode::Char('t'));
-    assert_eq!(app.session.active, 1);
+    key(&mut app, KeyCode::Char('g'));
+    key(&mut app, KeyCode::Char('t'));
+    assert_eq!(app.session.active, 2);
     key(&mut app, KeyCode::F(7));
     key(&mut app, KeyCode::Char('x'));
     key(&mut app, KeyCode::Char('\''));
     key(&mut app, KeyCode::Char('\''));
-    assert_eq!(app.session.views.len(), 3);
-    assert_eq!(app.session.views[1].name, "Return target copy");
-    assert_eq!(app.session.views[2].name, "Return target");
+    assert_eq!(app.session.views.len(), 4);
+    assert_eq!(app.session.views[2].name, "Return target copy");
+    assert_eq!(app.session.views[3].name, "Return target");
 }
