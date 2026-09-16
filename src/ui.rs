@@ -54,6 +54,7 @@ F8 lists marks; d then a letter deletes a mark in that dialog.
 No Vim text registers are implemented.
 
 x excludes the selected pathname; X excludes its directory subtree.
+u removes the most recent exclusion.
 / opens the path filter editor. Exclusions are regular expressions.
 Filters use Rust regex syntax (no lookaround/backreferences).
 F2 → a restores automatic IOC assessment, including a cleared tag.
@@ -67,7 +68,8 @@ F2 → r reloads IOC YAML; manual assessments remain authoritative.
 D shows malformed-record diagnostics and source locations.
 Escape cancels pending work or closes a dialog. Ctrl+C also quits.
 Forms: Tab/Shift+Tab change field, Ctrl+U clears, Enter applies.
-Filter forms: F2 adds another exclusion. Details: ↑/↓ scroll.
+Filter forms: F2 adds an exclusion; Ctrl+D removes the focused exclusion.
+Details: ↑/↓ scroll.
 State is saved automatically. Sources are never modified.";
 
 #[derive(Clone, Copy)]
@@ -161,12 +163,24 @@ impl App {
     fn view_mut(&mut self) -> &mut View {
         &mut self.session.views[self.session.active]
     }
+    fn requested_view(&self) -> &View {
+        self.pending
+            .as_ref()
+            .and_then(|pending| pending.candidate.as_ref())
+            .unwrap_or_else(|| self.view())
+    }
+    fn reload_filters(&mut self, mut view: View) -> Action {
+        let anchor = self.rows.get(self.top).map(|row| row.key).or(view.top);
+        view.top = anchor;
+        self.load(Load::Replace, Some(view), anchor, true)
+    }
     fn selected(&self) -> Option<&Row> {
         self.rows.get(self.top + self.view().selected)
     }
     fn remember(&mut self) {
-        let key = self.rows.get(self.top).map(|r| r.key);
-        self.view_mut().top = key;
+        if let Some(key) = self.rows.get(self.top).map(|row| row.key) {
+            self.view_mut().top = Some(key);
+        }
         self.dirty_session = true;
     }
     fn load(
@@ -310,7 +324,7 @@ impl App {
                     self.view_mut().selected = 0;
                 }
                 if rows.is_empty() && anchor.is_some() && matches!(mode, Load::Replace) {
-                    return vec![self.load(Load::Last, candidate, None, true)];
+                    return vec![self.load(Load::Last, candidate, anchor, false)];
                 }
                 match mode {
                     Load::Replace | Load::Last | Load::Mark(_, _) => {
@@ -418,28 +432,35 @@ impl App {
                         .unwrap_or_default()
                 };
                 vec![
-                    ("Begin (blank = unbounded)", format(self.view().after)),
-                    ("End (blank = unbounded)", format(self.view().before)),
+                    (
+                        "Begin (blank = unbounded)",
+                        format(self.requested_view().after),
+                    ),
+                    (
+                        "End (blank = unbounded)",
+                        format(self.requested_view().before),
+                    ),
                     ("Timezone", self.session.timezone.clone()),
                 ]
             }
             FormKind::Filters => {
+                let view = self.requested_view();
                 let mut fields = vec![
-                    ("Include path regex", self.view().predicate.include.clone()),
+                    ("Include path regex", view.predicate.include.clone()),
                     (
                         "Hosts (comma separated; blank = all)",
-                        self.view().predicate.hosts.join(","),
+                        view.predicate.hosts.join(","),
                     ),
                     (
                         "Timestamp types (macb)",
-                        macb(self.view().time_mask).replace('.', ""),
+                        macb(view.time_mask).replace('.', ""),
                     ),
                     (
                         "Include nonpositive timestamps (yes/no)",
-                        if self.view().bogus { "yes" } else { "no" }.into(),
+                        if view.bogus { "yes" } else { "no" }.into(),
                     ),
                 ];
-                for pattern in &self.view().predicate.exclude {
+                for pattern in &view.predicate.exclude {
                     fields.push(("Exclude path regex", pattern.clone()));
                 }
                 fields.push(("Exclude path regex", String::new()));
@@ -465,7 +486,7 @@ impl App {
         match form.kind {
             FormKind::Time => {
                 let tz = value(2).parse()?;
-                let mut view = self.view().clone();
+                let mut view = self.requested_view().clone();
                 view.after = boundary(value(0), tz, false)?;
                 view.before = boundary(value(1), tz, true)?;
                 view.top = None;
@@ -475,7 +496,7 @@ impl App {
                 Ok(vec![self.load(Load::Replace, Some(view), None, true)])
             }
             FormKind::Filters => {
-                let mut view = self.view().clone();
+                let mut view = self.requested_view().clone();
                 view.predicate.include = value(0).into();
                 view.predicate.hosts = value(1)
                     .split(',')
@@ -503,10 +524,8 @@ impl App {
                     .map(|f| f.1.clone())
                     .filter(|s| !s.is_empty())
                     .collect();
-                view.top = None;
-                view.selected = 0;
                 validate_view(&view)?;
-                Ok(vec![self.load(Load::Replace, Some(view), None, true)])
+                Ok(vec![self.reload_filters(view)])
             }
             FormKind::Export => {
                 let tags = if value(2).eq_ignore_ascii_case("all") {
@@ -606,9 +625,27 @@ impl App {
                             form.active = (form.active + form.fields.len() - 1) % form.fields.len()
                         }
                         KeyCode::F(2) if form.kind == FormKind::Filters => {
-                            form.fields
-                                .push(("Exclude path regex".into(), String::new()));
+                            if form
+                                .fields
+                                .last()
+                                .is_none_or(|(_, value)| !value.is_empty())
+                            {
+                                form.fields
+                                    .push(("Exclude path regex".into(), String::new()));
+                            }
                             form.active = form.fields.len() - 1;
+                        }
+                        KeyCode::Char('d')
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                && form.kind == FormKind::Filters
+                                && form.active >= 4 =>
+                        {
+                            form.fields.remove(form.active);
+                            if form.fields.len() == 4 {
+                                form.fields
+                                    .push(("Exclude path regex".into(), String::new()));
+                            }
+                            form.active = form.active.min(form.fields.len() - 1);
                         }
                         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             form.fields[form.active].1.clear()
@@ -806,6 +843,13 @@ impl App {
             KeyCode::F(8) => self.modal = Some(Modal::Marks),
             KeyCode::F(9) => self.form(FormKind::Export),
             KeyCode::Char('D') => return vec![Action::Command(Command::Diagnostics)],
+            KeyCode::Char('u') if key.modifiers.is_empty() => {
+                let mut view = self.requested_view().clone();
+                if view.predicate.exclude.pop().is_some() {
+                    return vec![self.reload_filters(view)];
+                }
+                self.status = "No exclusions to remove".into();
+            }
             KeyCode::Char('x' | 'X') => {
                 if let Some(path) = self.selected().map(|r| r.path.clone()) {
                     let pattern = if key.code == KeyCode::Char('X') {
@@ -817,14 +861,11 @@ impl App {
                     } else {
                         format!("^{}$", regex::escape(&path))
                     };
-                    let mut view = self.view().clone();
-                    view.predicate.exclude.push(pattern);
-                    return vec![self.load(
-                        Load::Replace,
-                        Some(view),
-                        self.rows.get(self.top).map(|r| r.key),
-                        true,
-                    )];
+                    let mut view = self.requested_view().clone();
+                    if !view.predicate.exclude.contains(&pattern) {
+                        view.predicate.exclude.push(pattern);
+                        return vec![self.reload_filters(view)];
+                    }
                 }
             }
             _ => {}

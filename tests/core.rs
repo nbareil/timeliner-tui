@@ -229,6 +229,163 @@ fn cached_smart_views_update_incrementally_and_filters_compose() {
 }
 
 #[test]
+fn exclusions_fill_a_page_from_the_timeframe_without_building_a_cache() {
+    let content = (1..=10000)
+        .map(|epoch| {
+            line(
+                if epoch % 10 == 0 { "/noise" } else { "/keep" },
+                &format!("{epoch}|{epoch}|{epoch}|{epoch}"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (_dir, store) = setup(&[content.as_bytes()]);
+    let reader = Store::reader(&store.root).unwrap();
+    let mut view = View {
+        predicate: Predicate {
+            exclude: vec!["^/noise$".into()],
+            ..Predicate::default()
+        },
+        after: Some(5000),
+        before: Some(5100),
+        ..View::default()
+    };
+    let mut checked = 0;
+    let result = query::page(
+        &reader,
+        &view,
+        query::Page {
+            limit: 50,
+            ..query::Page::default()
+        },
+        &Cancellation::never(),
+        |count| checked = count,
+    )
+    .unwrap();
+    assert_eq!(result.len(), 50);
+    assert!(result.iter().all(|row| row.path == "/keep"));
+    assert_eq!(result[0].key.epoch, 5001);
+    assert!(checked <= 60, "Examined {checked} candidates for 50 rows");
+    assert_eq!(fs::read_dir(store.root.join("views")).unwrap().count(), 0);
+
+    view.predicate.exclude.clear();
+    assert_eq!(rows(&reader, &view).len(), 101);
+    assert_eq!(fs::read_dir(store.root.join("views")).unwrap().count(), 0);
+    view.predicate.exclude.push(".*".into());
+    checked = 0;
+    assert!(
+        query::page(
+            &reader,
+            &view,
+            query::Page::default(),
+            &Cancellation::never(),
+            |count| checked = count,
+        )
+        .unwrap()
+        .is_empty()
+    );
+    assert_eq!(checked, 101, "Only the chosen timeframe should be searched");
+}
+
+#[test]
+fn filtered_cursor_pages_skip_excluded_batches_in_both_directions() {
+    let content = (0..80)
+        .map(|index| {
+            let epoch = index / 4 + 1;
+            line(
+                if index % 7 == 0 { "/keep" } else { "/noise" },
+                &format!("{epoch}|{epoch}|{epoch}|{epoch}"),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (_dir, store) = setup(&[content.as_bytes()]);
+    let view = View {
+        predicate: Predicate {
+            exclude: vec!["^/noise$".into()],
+            ..Predicate::default()
+        },
+        after: Some(3),
+        before: Some(18),
+        ..View::default()
+    };
+    let expected = rows(&store, &View::default())
+        .into_iter()
+        .filter(|row| row.path == "/keep" && (3..=18).contains(&row.key.epoch))
+        .map(|row| row.key)
+        .collect::<Vec<_>>();
+    for reverse in [false, true] {
+        let mut anchor = None;
+        let mut found = Vec::new();
+        loop {
+            let page = query::page(
+                &store,
+                &view,
+                query::Page {
+                    anchor,
+                    reverse,
+                    inclusive: false,
+                    limit: 2,
+                },
+                &Cancellation::never(),
+                |_| {},
+            )
+            .unwrap();
+            if page.is_empty() {
+                break;
+            }
+            assert!(page.len() <= 2);
+            if reverse {
+                anchor = Some(page[0].key);
+                found.splice(0..0, page.iter().map(|row| row.key));
+            } else {
+                anchor = Some(page.last().unwrap().key);
+                found.extend(page.iter().map(|row| row.key));
+            }
+            assert!(
+                found.len() <= expected.len(),
+                "Cursor repeated matching rows"
+            );
+        }
+        assert_eq!(found, expected);
+    }
+}
+
+#[test]
+fn exclusion_edits_reuse_the_same_tag_cache() {
+    let content = format!(
+        "{}\n{}",
+        line("/keep", "1|2|3|4"),
+        line("/noise", "5|6|7|8")
+    );
+    let (_dir, store) = setup(&[content.as_bytes()]);
+    tag(&store, 1, Some(Tag::Ioc));
+    tag(&store, 2, Some(Tag::Ioc));
+    let mut view = View {
+        predicate: Predicate {
+            tags: Some(vec![Tag::Ioc]),
+            ..Predicate::default()
+        },
+        ..View::default()
+    };
+    assert_eq!(rows(&store, &view).len(), 8);
+    let cache_files = || {
+        fs::read_dir(store.root.join("views"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>()
+    };
+    let original = cache_files();
+    assert_eq!(original.len(), 1);
+    view.predicate.exclude.push("^/noise$".into());
+    assert_eq!(rows(&store, &view).len(), 4);
+    assert_eq!(cache_files(), original);
+    view.predicate.exclude.clear();
+    assert_eq!(rows(&store, &view).len(), 8);
+    assert_eq!(cache_files(), original);
+}
+
+#[test]
 fn cursor_pagination_is_stable_in_both_directions() {
     let content = (0..150)
         .map(|i| line(&format!("/f{i}"), "100|100|100|100"))

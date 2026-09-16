@@ -103,7 +103,7 @@ fn cache_path(root: &Path, predicate: &Predicate) -> Result<PathBuf> {
     Ok(root.join("views").join(format!("{key}.sqlite")))
 }
 
-/// Membership excludes time bounds, so timeframe edits reuse the same index.
+/// Cache only tag membership. Path and host filters run while fetching pages.
 pub fn cache(
     store: &Store,
     predicate: &Predicate,
@@ -113,10 +113,14 @@ pub fn cache(
     cancel.check()?;
     cancel.install(&store.conn)?;
     let _reset = ResetCancellation(&store.conn);
+    let predicate = Predicate {
+        tags: predicate.tags.clone(),
+        ..Predicate::default()
+    };
     if predicate.is_all() {
         return Ok(None);
     }
-    let path = cache_path(&store.root, predicate)?;
+    let path = cache_path(&store.root, &predicate)?;
     let revision = store.revision()?;
     if path.exists() {
         let db = Connection::open(&path)?;
@@ -127,7 +131,7 @@ pub fn cache(
             return Ok(Some(path));
         }
     }
-    let matcher = Matcher::new(predicate)?;
+    let matcher = Matcher::new(&predicate)?;
     let temporary = tempfile::NamedTempFile::new_in(store.root.join("views"))?;
     let mut db = Connection::open(temporary.path())?;
     configure(&db)?;
@@ -142,7 +146,7 @@ pub fn cache(
         let mut event_stmt = store
             .conn
             .prepare("SELECT epoch,macb FROM events WHERE record=?")?;
-        // Tag indexes make sparse smart tabs inexpensive; arbitrary path regexes scan records once.
+        // Sparse smart tabs use the tag index; exclusion edits reuse this cache.
         let tag_clause = match &predicate.tags {
             Some(tags) if tags.is_empty() => " WHERE tag IN (1,2,3)".to_string(),
             Some(tags) => format!(
@@ -184,7 +188,7 @@ pub fn cache(
     }
     tx.execute(
         "INSERT INTO config VALUES(?,?)",
-        params![revision, serde_json::to_string(predicate)?],
+        params![revision, serde_json::to_string(&predicate)?],
     )?;
     tx.commit()?;
     drop(db);
@@ -213,7 +217,15 @@ pub fn update_caches(store: &Store, id: i64, previous: i64) -> Result<()> {
         if revision != previous {
             continue;
         }
-        let matcher = Matcher::new(&serde_json::from_str(&json)?)?;
+        let predicate: Predicate = serde_json::from_str(&json)?;
+        if !predicate.include.is_empty()
+            || !predicate.exclude.is_empty()
+            || !predicate.hosts.is_empty()
+        {
+            // Older releases cached complete path filters; those caches are no longer used.
+            continue;
+        }
+        let matcher = Matcher::new(&predicate)?;
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM events WHERE record=?", [id])?;
         if matcher.matches(&path, &host, Tag::from_i64(tag)) {
@@ -247,6 +259,12 @@ pub fn page(
         limit,
     } = page;
     validate_view(view)?;
+    cancel.check()?;
+    let limit = limit.min(4096);
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let matcher = Matcher::new(&view.predicate)?;
     let path = cache(store, &view.predicate, cancel, &mut progress)?;
     let cache_db = path.as_ref().map(Connection::open).transpose()?;
     if let Some(db) = &cache_db {
@@ -277,47 +295,74 @@ pub fn page(
             lower = if inclusive { ">=" } else { ">" };
         }
     }
-    let sql = cursor_sql(reverse, lower, upper);
-    let mut stmt = db.prepare(&sql)?;
-    let keys = stmt
-        .query_map(
-            params![
-                lo.epoch,
-                lo.record,
-                hi.epoch,
-                hi.record,
-                view.time_mask,
-                limit.min(4096) as i64
-            ],
-            |r| {
-                Ok((
-                    EventKey {
-                        epoch: r.get(0)?,
-                        record: r.get(1)?,
-                    },
-                    r.get::<_, u8>(2)?,
-                ))
-            },
-        )?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut details = store.conn.prepare_cached(
         "SELECT host,path,tag,manual_tag IS NULL,matches!='[]' FROM records WHERE id=?",
     )?;
-    let mut result = Vec::new();
-    for (key, macb) in keys {
+    let mut result = Vec::with_capacity(limit);
+    let mut checked = 0_u64;
+    loop {
         cancel.check()?;
-        result.push(details.query_row([key.record], |r| {
-            Ok(Row {
-                key,
-                macb,
-                host: r.get(0)?,
-                path: r.get(1)?,
-                tag: Tag::from_i64(r.get(2)?),
-                automatic: r.get(3)?,
-                ioc_match: r.get(4)?,
-            })
-        })?);
+        let sql = cursor_sql(reverse, lower, upper);
+        let mut stmt = db.prepare_cached(&sql)?;
+        let keys = stmt
+            .query_map(
+                params![
+                    lo.epoch,
+                    lo.record,
+                    hi.epoch,
+                    hi.record,
+                    view.time_mask,
+                    limit as i64
+                ],
+                |r| {
+                    Ok((
+                        EventKey {
+                            epoch: r.get(0)?,
+                            record: r.get(1)?,
+                        },
+                        r.get::<_, u8>(2)?,
+                    ))
+                },
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for &(key, macb) in &keys {
+            cancel.check()?;
+            let row = details.query_row([key.record], |r| {
+                Ok(Row {
+                    key,
+                    macb,
+                    host: r.get(0)?,
+                    path: r.get(1)?,
+                    tag: Tag::from_i64(r.get(2)?),
+                    automatic: r.get(3)?,
+                    ioc_match: r.get(4)?,
+                })
+            })?;
+            checked += 1;
+            if checked.is_multiple_of(1024) {
+                progress(checked);
+            }
+            if matcher.matches(&row.path, &row.host, row.tag) {
+                result.push(row);
+                if result.len() == limit {
+                    break;
+                }
+            }
+        }
+        if result.len() == limit || keys.len() < limit {
+            break;
+        }
+        let last = keys.last().unwrap().0;
+        if reverse {
+            hi = last;
+            upper = "<";
+        } else {
+            lo = last;
+            lower = ">";
+        }
     }
+    progress(checked);
+    cancel.check()?;
     if reverse {
         result.reverse();
     }

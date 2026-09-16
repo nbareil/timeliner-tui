@@ -631,7 +631,7 @@ impl App {
                     let hint = if !form.error.is_empty() {
                         form.error.clone()
                     } else if form.kind == FormKind::Filters {
-                        "F2 adds an exclusion pattern".into()
+                        "F2 add exclusion · Ctrl+D remove · Enter apply".into()
                     } else {
                         "Enter applies your changes".into()
                     };

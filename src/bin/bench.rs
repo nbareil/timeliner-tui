@@ -72,6 +72,14 @@ fn main() -> Result<()> {
     let cancel = Cancellation::never();
     let view = View::default();
     let mut times = Vec::new();
+    let mut exclusion_add_times = Vec::new();
+    let mut exclusion_remove_times = Vec::new();
+    let mut exclusion_candidates_max = 0;
+    let cache_bytes = || -> Result<u64> {
+        std::fs::read_dir(store.root.join("views"))?
+            .try_fold(0, |total, entry| Ok(total + entry?.metadata()?.len()))
+    };
+    let cache_bytes_before = cache_bytes()?;
     for i in 0..200 {
         let start = Instant::now();
         query::page(
@@ -90,8 +98,51 @@ fn main() -> Result<()> {
             |_| {},
         )?;
         times.push(start.elapsed().as_secs_f64() * 1000.0);
+        let excluded = View {
+            predicate: Predicate {
+                exclude: vec![format!("^/var/log/host{}/", i % 32)],
+                ..Predicate::default()
+            },
+            ..View::default()
+        };
+        let start = Instant::now();
+        query::page(
+            &store,
+            &excluded,
+            query::Page {
+                anchor: Some(EventKey {
+                    epoch: 1_600_000_000 + i * 150_000,
+                    record: 0,
+                }),
+                limit: 100,
+                inclusive: true,
+                ..query::Page::default()
+            },
+            &cancel,
+            |count| exclusion_candidates_max = exclusion_candidates_max.max(count),
+        )?;
+        exclusion_add_times.push(start.elapsed().as_secs_f64() * 1000.0);
+        let start = Instant::now();
+        query::page(
+            &store,
+            &view,
+            query::Page {
+                anchor: Some(EventKey {
+                    epoch: 1_600_000_000 + i * 150_000,
+                    record: 0,
+                }),
+                limit: 100,
+                inclusive: true,
+                ..query::Page::default()
+            },
+            &cancel,
+            |_| {},
+        )?;
+        exclusion_remove_times.push(start.elapsed().as_secs_f64() * 1000.0);
     }
     times.sort_by(f64::total_cmp);
+    exclusion_add_times.sort_by(f64::total_cmp);
+    exclusion_remove_times.sort_by(f64::total_cmp);
     let filtered = View {
         predicate: Predicate {
             include: "/file42\\.log$".into(),
@@ -114,7 +165,10 @@ fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::json!({"records":args.records,"import_seconds":import,"records_per_second":import.map(|seconds|args.records as f64/seconds),
-        "page_p95_ms":times[190],"path_filter_seconds":filter,"index_bytes":std::fs::metadata(args.directory.join("workspace/index.sqlite"))?.len(),
+        "page_p95_ms":times[190],"path_filter_seconds":filter,
+        "exclusion_add_p95_ms":exclusion_add_times[190],"exclusion_remove_p95_ms":exclusion_remove_times[190],
+        "exclusion_candidates_max":exclusion_candidates_max,"new_filter_cache_bytes":cache_bytes()?.saturating_sub(cache_bytes_before),
+        "index_bytes":std::fs::metadata(args.directory.join("workspace/index.sqlite"))?.len(),
         "memory":std::fs::read_to_string("/proc/self/status").unwrap_or_default().lines().filter(|l|l.starts_with("VmHWM:")||l.starts_with("VmRSS:")).collect::<Vec<_>>()})
     );
     Ok(())

@@ -331,6 +331,93 @@ fn bookmark_markers_follow_exact_events_and_update_after_reassignment_and_deleti
 }
 
 #[test]
+fn exclusion_edits_compose_while_loading_and_undo_preserves_the_position() {
+    let mut app = app();
+    app.top = 20;
+    app.session.views[0].after = Some(1_600_000_010);
+    let anchor = app.rows[20].key;
+    let actions = key(&mut app, KeyCode::Char('x'));
+    let [Action::Page(first)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(first.anchor, Some(anchor));
+    assert_eq!(first.view.predicate.exclude, ["^/tmp/file\\-20$"]);
+    key(&mut app, KeyCode::Char('j'));
+    let actions = key(&mut app, KeyCode::Char('x'));
+    let [Action::Page(second)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(second.view.predicate.exclude.len(), 2);
+    assert_eq!(second.anchor, Some(anchor));
+    let actions = key(&mut app, KeyCode::Char('u'));
+    let [Action::Page(undo)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(undo.view.predicate.exclude, first.view.predicate.exclude);
+    assert_eq!(undo.view.after, first.view.after);
+    assert_eq!(undo.anchor, Some(anchor));
+    let actions = key(&mut app, KeyCode::Char('u'));
+    let [Action::Page(clear)] = actions.as_slice() else {
+        panic!()
+    };
+    assert!(clear.view.predicate.exclude.is_empty());
+    assert_eq!(clear.anchor, Some(anchor));
+}
+
+#[test]
+fn undoing_an_exclusion_after_no_matches_restores_the_previous_position() {
+    let mut app = app();
+    app.top = 20;
+    let anchor = app.rows[20].key;
+    let actions = key(&mut app, KeyCode::Char('X'));
+    let [Action::Page(forward)] = actions.as_slice() else {
+        panic!()
+    };
+    let actions = app.message(timeliner_tui::worker::Message::Page(
+        forward.generation,
+        vec![],
+    ));
+    let [Action::Page(backward)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(backward.anchor, Some(anchor));
+    app.message(timeliner_tui::worker::Message::Page(
+        backward.generation,
+        vec![],
+    ));
+    assert!(app.rows.is_empty());
+    let actions = key(&mut app, KeyCode::Char('u'));
+    let [Action::Page(undo)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(undo.anchor, Some(anchor));
+    assert!(undo.view.predicate.exclude.is_empty());
+}
+
+#[test]
+fn filter_form_removes_individual_exclusions_and_focuses_new_ones() {
+    let mut app = app();
+    app.top = 20;
+    app.session.views[0].predicate.exclude = vec!["first".into(), "second".into()];
+    let anchor = app.rows[20].key;
+    key(&mut app, KeyCode::F(5));
+    for _ in 0..4 {
+        key(&mut app, KeyCode::Tab);
+    }
+    app.key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL));
+    key(&mut app, KeyCode::F(2));
+    for character in "third".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    let actions = key(&mut app, KeyCode::Enter);
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(request.view.predicate.exclude, ["second", "third"]);
+    assert_eq!(request.anchor, Some(anchor));
+}
+
+#[test]
 fn tag_is_right_aligned_and_keys_survive_standard_terminal_resize() {
     let mut app = app();
     app.rows[0].tag = Tag::Suspicious;
@@ -540,12 +627,13 @@ fn clearing_last_tagged_row_falls_back_to_previous_matches() {
     let [Action::Page(request)] = actions.as_slice() else {
         panic!("Expected refresh")
     };
+    let anchor = request.anchor;
     let actions = app.message(timeliner_tui::worker::Message::Page(
         request.generation,
         vec![],
     ));
     assert!(
-        matches!(actions.as_slice(),[Action::Page(request)] if request.reverse && request.anchor.is_none())
+        matches!(actions.as_slice(),[Action::Page(request)] if request.reverse && request.anchor == anchor && !request.inclusive)
     );
 }
 

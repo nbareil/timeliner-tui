@@ -1,0 +1,36 @@
+  ◆ TIMELINER        Tab 1/4  1–9 select · gt/gT switch                                                                               F11  Dark
+   ● 1 All activity   2 IOC review   3 Authentication   4 Tagged
+  TIME  2026-09-08 08:10:00  →  2026-09-09 09:10:00   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                            ASSESSMENT
+  2026-09-08 09:10:00 web-01                     m··· /etc/ssh/sshd_config
+  2026-09-08 09:10:37 db-01                      ·a·· /var/log/auth.log
+  2026-09-08 09:11:14 edg╭  Filter timeline  ─────────────────────────────────────────────────────────────────────────╮
+● 2026-09-08 09:11:51 app│  Tab next field · Ctrl+U clear · Enter apply                                               │               SUSPICIOUS
+  2026-09-08 09:12:28 web│                                                                                            │
+  2026-09-08 09:13:05 db-│  Include path regex                                                                        │                      IOC
+  2026-09-08 09:13:42 edg│  ▎                                                                                         │
+● 2026-09-08 09:14:19 app│                                                                                            │                MALICIOUS
+  2026-09-08 09:14:56 web│  Hosts (comma separated; blank = all)                                                      │
+  2026-09-08 09:15:33 db-│                                                                                            │
+  2026-09-08 09:16:10 edg│                                                                                            │
+  2026-09-08 09:16:47 app│  Timestamp types (macb)                                                                    │
+  2026-09-08 09:17:24 web│    macb                                                                                    │
+  2026-09-08 09:18:01 db-│                                                                                            │
+  2026-09-08 09:18:38 edg│  Include nonpositive timestamps (yes/no)                                                   │               SUSPICIOUS
+  2026-09-08 09:19:15 app│    no                                                                                      │                      IOC
+  2026-09-08 09:19:52 web│                                                                                            │
+  2026-09-08 09:20:29 db-│  Exclude path regex                                                                        │
+  2026-09-08 09:21:06 edg│                                                                                            │
+  2026-09-08 09:21:43 app│                                                                                            │
+  2026-09-08 09:22:20 web│                                                                                            │
+  2026-09-08 09:22:57 db-│                                                                                            │
+  2026-09-08 09:23:34 edg│  F2 add exclusion · Ctrl+D remove · Enter apply                                            │
+  2026-09-08 09:24:11 app╰───────────────────────────────────────────────────────────────────────────────── Esc close ╯
+  2026-09-08 09:24:48 web-01                     macb /home/deploy/.config/environment
+  2026-09-08 09:25:25 db-01                      m··· /var/log/syslog
+  2026-09-08 09:26:02 edge-02                    ·a·· /opt/application/releases/current
+  2026-09-08 09:26:39 app-04                     m·c· /etc/hosts
+  ● Ready · 4 collections indexed
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect   gt/gT tabs   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     F10  Quit

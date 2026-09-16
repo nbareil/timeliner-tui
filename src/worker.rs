@@ -294,7 +294,7 @@ impl Workers {
                             if count % 65536 == 0 {
                                 let _ = messages_tx.send(Message::Progress(
                                     request.generation,
-                                    format!("Filtering: {count} records scanned"),
+                                    format!("Searching: {count} candidates checked"),
                                 ));
                             }
                         },

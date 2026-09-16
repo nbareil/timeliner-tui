@@ -93,12 +93,14 @@ byte offset, original record, and matching rules.
 | F10 / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
 | x / X | Exclude the selected pathname / directory subtree |
+| u | Remove the most recent exclusion |
 | D | Malformed-record diagnostics |
 | Escape | Close a dialog or cancel pending work |
 
 TAB tags the **whole original bodyfile record**. Its other timestamp events carry
 the same assessment in every tab. TAB switches fields when a dialog has focus.
-Forms support Ctrl+U to clear a field; F2 adds an exclusion in the filter editor.
+Forms support Ctrl+U to clear a field. In the filter editor, F2 focuses a new
+exclusion and Ctrl+D removes the focused exclusion; Enter applies the changes.
 
 New workspaces start with Timeline and IOC tabs. The IOC tab shows records whose
 current assessment is IOC across the whole investigation. Saved workspaces
@@ -142,8 +144,15 @@ are combined with AND. Invalid regexes leave the working view intact. The syntax
 is Rust regex syntax, without lookaround or backreferences.
 
 Nonpositive timestamps are hidden by default. Enable them in F5 when needed.
-Path-filter construction runs in the background and can be cancelled; time
-boundaries reuse the resulting disk index.
+Exclusions apply as pages are fetched from your current position, within the
+selected timeframe. Adding or removing one does not build a full filtered
+database. Use `x` or `X` to exclude a pathname or directory, `u` to undo the most
+recent exclusion, or F5 to edit individual patterns.
+
+Searches run in the background and Escape cancels them. A very restrictive
+filter can still require searching much of the selected timeframe to fill a
+page or establish that there are no matches. Tag views reuse a separate tag
+index; changing path or host filters does not rebuild it.
 
 ## UAC and hostnames
 
@@ -229,6 +238,7 @@ imported as a new source; annotations are never silently reassigned to it.
 ```sh
 nix develop path:.
 cargo run -- timeline.body
+cargo build --release --locked
 cargo test --locked
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
@@ -252,11 +262,12 @@ assessment state, CLI behavior, and terminal rendering.
 
 The design targets 10–100 million source records, with up to four timestamp events
 per record. SQLite caches, record buffers, and rendered rows are bounded.
-Membership caches and deduplicated export selections use disk storage; scrolling
-uses indexed cursors instead of increasing SQL offsets.
+Tag-view indexes and deduplicated export selections use disk storage; scrolling
+uses indexed cursors instead of increasing SQL offsets. Path and host filters
+are evaluated during pagination without copying matching events to disk.
 
 Workspace size can exceed source size substantially. Choose local storage with
-room for the main index, filter caches, and temporary exports. Broad rule reloads
+room for the main index, tag indexes, and temporary exports. Broad rule reloads
 use an atomic transaction and can temporarily grow the SQLite WAL.
 
 Run the deterministic benchmark on an **unused directory**:
@@ -271,10 +282,10 @@ cargo run --release --bin timeliner-bench -- \
 ```
 
 It reports import throughput, index size, process memory, p95 indexed page-query
-latency, and path-filter construction time. It retains the generated data for
-inspection. Increase `--records` to `10000000` or `100000000` on appropriately
-sized storage. See [benchmark results](docs/benchmarks.md) for measured results
-and their limits.
+latency, exclusion add/remove latency, and sparse path-search time. It retains
+the generated data for inspection. Increase `--records` to `10000000` or
+`100000000` on appropriately sized storage. See [benchmark results](docs/benchmarks.md)
+for measured results and their limits.
 
 The parser accepts integer epoch seconds and unsigned 64-bit sizes, matching the
 original Timeliner's supported bodyfiles. Unsupported or malformed records are
