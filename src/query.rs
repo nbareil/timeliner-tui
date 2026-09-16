@@ -199,12 +199,21 @@ pub fn cache(
 
 /// Incrementally repair completed view caches after a single record assessment.
 pub fn update_caches(store: &Store, id: i64, previous: i64) -> Result<()> {
-    let (path, host, tag): (String, String, i64) =
-        store
-            .conn
-            .query_row("SELECT path,host,tag FROM records WHERE id=?", [id], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-            })?;
+    update_caches_for_records(store, &[id], previous)
+}
+
+/// Repair each completed cache once after a batch assessment.
+pub fn update_caches_for_records(store: &Store, ids: &[i64], previous: i64) -> Result<()> {
+    let mut records = Vec::with_capacity(ids.len());
+    for &id in ids {
+        let (path, host, tag): (String, String, i64) =
+            store
+                .conn
+                .query_row("SELECT path,host,tag FROM records WHERE id=?", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })?;
+        records.push((id, path, host, Tag::from_i64(tag)));
+    }
     for entry in fs::read_dir(store.root.join("views"))? {
         let entry = entry?;
         if entry.path().extension().is_none_or(|e| e != "sqlite") {
@@ -228,16 +237,18 @@ pub fn update_caches(store: &Store, id: i64, previous: i64) -> Result<()> {
         }
         let matcher = Matcher::new(&predicate)?;
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM events WHERE record=?", [id])?;
-        if matcher.matches(&path, &host, Tag::from_i64(tag)) {
-            let mut statement = store
-                .conn
-                .prepare("SELECT epoch,macb FROM events WHERE record=?")?;
-            for event in
-                statement.query_map([id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, u8>(1)?)))?
-            {
-                let (epoch, mask) = event?;
-                tx.execute("INSERT INTO events VALUES(?,?,?)", params![epoch, id, mask])?;
+        for (id, path, host, tag) in &records {
+            tx.execute("DELETE FROM events WHERE record=?", [id])?;
+            if matcher.matches(path, host, *tag) {
+                let mut statement = store
+                    .conn
+                    .prepare("SELECT epoch,macb FROM events WHERE record=?")?;
+                for event in
+                    statement.query_map([id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, u8>(1)?)))?
+                {
+                    let (epoch, mask) = event?;
+                    tx.execute("INSERT INTO events VALUES(?,?,?)", params![epoch, id, mask])?;
+                }
             }
         }
         tx.execute("UPDATE config SET revision=?", [store.revision()?])?;

@@ -77,6 +77,7 @@ byte offset, original record, and matching rules.
 | ↑ / ↓ | Scroll one row, keeping the same event selected while it is visible |
 | j / k | Select the next / previous event; scroll one row at screen edges |
 | Page Up / Page Down | Scroll a screen |
+| g | Goto an ISO date/time; Enter centers the first matching event at or after it |
 | gg / G | Jump to the first / last matching event |
 | nm / nh / nd / nM / ny | Jump to the next minute / hour / day / month / year, centered |
 | nt | Jump to the next tagged event, centered |
@@ -84,10 +85,11 @@ byte offset, original record, and matching rules.
 | bt | Jump to the previous tagged event, centered |
 | zt / zz / zb | Put the selected event at the top / middle / bottom |
 | z ENTER / z. / z- | Aliases for zt / zz / zb |
-| TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged |
+| SPACE | Toggle a file in the selection |
+| TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged for the selection, or the focused file |
 | ENTER / F3 | Record details |
 | F1 | Help |
-| F2 | Set/clear a tag, restore automatic assessment, or reload IOC rules |
+| F2 | Set/clear a tag or restore automatic assessment for the selection; also offers IOC rule reload |
 | F4 | Begin/end timeframe and timezone |
 | F5 / `/` | Path, host, timestamp-type, and bogus-time filters |
 | F6 | Fork the current view |
@@ -101,11 +103,11 @@ byte offset, original record, and matching rules.
 | F11 | Switch light/dark theme |
 | c | Collapse a burst around the selected event; expand a selected summary |
 | C (Shift+c) | Set the burst density threshold |
-| x | Exclude the selected pathname |
+| x | Exclude all SPACE-selected pathnames, or the focused pathname |
 | X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
-| u | Remove the most recent exclusion |
+| u | Remove the most recent exclusion, including a whole batch |
 | D | Malformed-record diagnostics |
-| Escape | Close a dialog or cancel pending work |
+| Escape | Close a dialog; otherwise clear the selection and cancel pending work |
 
 Arrow keys keep the same event highlighted as the timeline scrolls. If that
 event leaves the screen, selection moves to the nearest visible event.
@@ -157,8 +159,28 @@ also quits from dialogs. In text fields, `q` is ordinary input; in bookmark
 commands and the F8 list, it selects bookmark `q`. F10 has no action.
 See the [terminal capture](docs/images/quit.txt).
 
-TAB tags the **whole original bodyfile record**. Its other timestamp events carry
-the same assessment in every tab. TAB switches fields when a dialog has focus.
+Press **SPACE** to select or deselect the focused file. A `✓` appears beside all
+timestamp entries for that source record, and the status line shows the number
+of selected files. Move with `j`/`k` or the arrow keys and press SPACE on more
+files; the selection survives scrolling and page loads.
+
+With a selection, **TAB** and **F2** apply the chosen assessment to every selected
+file. TAB advances the focused selected file's tag; if focus is outside the
+selection, it advances the first selected source record's tag. Every selected
+file receives that same tag. F2 can also clear their tags or restore each file's
+automatic IOC assessment. With no selection, these actions affect the focused
+file. Tags belong to the **whole original bodyfile record**, so its other
+timestamp events carry the same assessment in every tab.
+
+Press **x** to exclude all selected pathnames together; **u** undoes that batch.
+Selections remain after tagging, including when a tag filter hides a selected
+file. Escape in the timeline, switching tabs, and applying different filters or
+a timeframe clear the selection, as does reloading IOC rules. Selections are not
+saved between runs. `X` continues to edit the focused entry's parent directory.
+Expand a burst summary before selecting its files.
+See the [terminal capture](docs/images/multi-selection.txt).
+
+TAB switches fields when a dialog has focus.
 Forms support Ctrl+U to clear a field. In the filter editor, F2 focuses a new
 exclusion and Ctrl+D removes the focused exclusion; Enter applies the changes.
 
@@ -278,6 +300,23 @@ UTC is the default timezone. `--tz America/New_York` changes display and boundar
 interpretation. F4 changes the timeframe interactively. Blank boundaries are
 unbounded; a date-only begin means midnight and a date-only end includes the
 entire day. Ambiguous or nonexistent local times are rejected.
+
+Press **g** to open Goto, enter a date/time such as `2026-09-16T12:34:56Z`,
+and press **Enter**. Goto centers the first event at or after that time that
+matches the current timeframe and filters. It also reveals a destination inside
+a collapsed burst. Press `''` to return to the previous position.
+
+Goto accepts `YYYY-MM-DD`, local date/times such as `2026-09-16T12:34` or
+`2026-09-16 12:34:56`, and timestamps with `Z` or an explicit offset such as
+`2026-09-16T12:34:56+02:00`. Without an offset, it uses the displayed timezone;
+a date alone means midnight. Fractional seconds advance to the next whole second
+when necessary. Ambiguous or nonexistent local times require an explicit offset.
+Invalid input stays in the dialog for correction; Escape closes it. If no event
+matches, the timeline stays at its current position.
+
+The existing `gg`, `gt`, and `gT` shortcuts still work: in an empty Goto field,
+press `g` for the beginning, `t` for the next tab, or `T` for the previous tab.
+See the [Goto terminal capture](docs/images/goto.txt).
 
 ENTER/F3 displays all four record timestamps in ISO 8601 format with the selected
 timezone's offset, for example `2026-09-16T12:34:56+00:00`. All formatted field
@@ -425,7 +464,8 @@ or fold summaries; raw queries and exports continue to use `src/query.rs`.
 `src/navigation.rs` calculates timezone-aware boundaries and finds time or tag
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
-timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
+timeline data; append `details`, `filters`, `tags`, `views`, or `goto` to preview dialogs,
+or `selection` to preview multiple selected files.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It

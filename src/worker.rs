@@ -44,6 +44,7 @@ pub struct BurstRequest {
 
 pub enum Command {
     Tag(i64, Option<Tag>),
+    TagMany(Vec<i64>, Option<Tag>),
     Save(Session),
     Detail(i64, Tz),
     Diagnostics,
@@ -59,6 +60,7 @@ pub enum Message {
     JumpTarget(u64, Option<Row>),
     Progress(u64, String),
     Tagged(TagChange),
+    TaggedMany(Vec<TagChange>),
     Changed,
     Detail(String),
     Status(String),
@@ -180,6 +182,13 @@ impl Workers {
                             let change = store.set_tag(id, tag)?;
                             query::update_caches(&store, id, revision)?;
                             tx.send(Message::Tagged(change))?;
+                            Ok(())
+                        })(),
+                        Command::TagMany(ids, tag) => (|| -> Result<()> {
+                            let revision = store.revision()?;
+                            let changes = store.set_tags(&ids, tag)?;
+                            query::update_caches_for_records(&store, &ids, revision)?;
+                            tx.send(Message::TaggedMany(changes))?;
                             Ok(())
                         })(),
                         Command::Detail(id, timezone) => {

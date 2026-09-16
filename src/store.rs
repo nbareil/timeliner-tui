@@ -386,45 +386,62 @@ impl Store {
     }
 
     pub fn set_tag(&self, record: i64, manual: Option<Tag>) -> Result<TagChange> {
+        Ok(self.set_tags(&[record], manual)?.remove(0))
+    }
+
+    /// Assess each distinct source record in one transaction.
+    pub fn set_tags(&self, records: &[i64], manual: Option<Tag>) -> Result<Vec<TagChange>> {
+        if records.is_empty() {
+            return Ok(Vec::new());
+        }
         let tx = self.conn.unchecked_transaction()?;
-        let (host, path, before): (String, String, i64) = tx.query_row(
-            "SELECT host,path,tag FROM records WHERE id=?",
-            [record],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        let changed = tx.execute(
-            "UPDATE records SET manual_tag=?, tag=COALESCE(?, CASE WHEN matches='[]' THEN 0 ELSE 2 END) WHERE id=?",
-            params![manual.map(|t| t as i64),manual.map(|t| t as i64),record])?;
-        if changed != 1 {
-            bail!("Record no longer exists");
+        let mut changes = Vec::new();
+        for record in records
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+        {
+            let (host, path, before): (String, String, i64) = tx.query_row(
+                "SELECT host,path,tag FROM records WHERE id=?",
+                [record],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )?;
+            let changed = tx.execute(
+                "UPDATE records SET manual_tag=?, tag=COALESCE(?, CASE WHEN matches='[]' THEN 0 ELSE 2 END) WHERE id=?",
+                params![manual.map(|t| t as i64), manual.map(|t| t as i64), record],
+            )?;
+            if changed != 1 {
+                bail!("Record no longer exists");
+            }
+            let after = tx.query_row("SELECT tag FROM records WHERE id=?", [record], |row| {
+                row.get::<_, i64>(0)
+            })?;
+            let events = tx
+                .prepare("SELECT epoch,macb FROM events WHERE record=? ORDER BY epoch")?
+                .query_map([record], |row| {
+                    Ok((
+                        EventKey {
+                            epoch: row.get(0)?,
+                            record,
+                        },
+                        row.get(1)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            changes.push(TagChange {
+                host,
+                path,
+                before: Tag::from_i64(before),
+                after: Tag::from_i64(after),
+                events,
+            });
         }
         tx.execute(
             "UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='revision'",
             [],
         )?;
-        let after = tx.query_row("SELECT tag FROM records WHERE id=?", [record], |row| {
-            row.get::<_, i64>(0)
-        })?;
-        let events = tx
-            .prepare("SELECT epoch,macb FROM events WHERE record=? ORDER BY epoch")?
-            .query_map([record], |row| {
-                Ok((
-                    EventKey {
-                        epoch: row.get(0)?,
-                        record,
-                    },
-                    row.get(1)?,
-                ))
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
         tx.commit()?;
-        Ok(TagChange {
-            host,
-            path,
-            before: Tag::from_i64(before),
-            after: Tag::from_i64(after),
-            events,
-        })
+        Ok(changes)
     }
 
     pub fn reference(&self, id: i64) -> Result<RecordReference> {

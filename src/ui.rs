@@ -2,10 +2,10 @@ use crate::{
     burst,
     export::Export,
     model::{
-        Bookmark, DisplayRow, EventKey, Predicate, Row, Session, Tag, View, boundary, display_text,
-        macb, validate_view,
+        Bookmark, DisplayRow, EventKey, Predicate, Row, Session, Tag, TagChange, View, boundary,
+        display_text, macb, validate_view,
     },
-    navigation::{Jump, TimeUnit},
+    navigation::{Jump, TimeUnit, parse_goto},
     worker::{BurstRequest, Command, Message, PageRequest, Workers},
 };
 use anyhow::{Result, bail};
@@ -27,6 +27,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Tabs, Wrap},
 };
 use std::{
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
     io::{self, IsTerminal},
     path::PathBuf,
     sync::atomic::Ordering,
@@ -51,6 +52,10 @@ Mouse wheel scrolls details/help/bookmarks or moves between form fields.
 F10 toggles mouse capture for terminal text selection and copying, even in dialogs.
 Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
+g opens Goto: type an ISO date/time and Enter to center the first match at or after it.
+Use Z or an explicit offset, or omit the offset to use the displayed timezone.
+Date-only input means midnight. Current filters apply; '' returns after the jump.
+In an empty Goto field, g/t/T still complete gg/gt/gT.
 nm/nh/nd/nM/ny jump to the next minute/hour/day/month/year and center it.
 nt jumps to the next tagged event and centers it, including within the same second.
 bm/bh/bd/bM/by jump backward to the preceding minute/hour/day/month/year boundary.
@@ -59,7 +64,12 @@ Jumps use the selected timezone and current filters; '' returns.
 From a collapsed burst, forward jumps start after its end; backward jumps before its start.
 zt/zz/zb put the selected event at the top/middle/bottom.
 z Enter / z. / z- do the same. Selection stays on the same event.
-TAB cycles a record's assessment. ENTER/F3 opens full details.
+SPACE toggles a file in the selection; ✓ marks all its timestamp entries.
+Selections survive scrolling and tagging. Esc clears them; changing tabs or filters resets them.
+Reloading IOC rules clears the selection.
+TAB cycles the focused selected file's assessment and applies it to the selection.
+If focus is outside the selection, TAB uses the first selected source record.
+F2 sets/clears/restores assessments for the selection. ENTER/F3 opens full details.
 Tags belong to source records, so all their MACB events agree.
 
 F1 Help   F2 Tags / reload IOC rules   F3 Details
@@ -77,10 +87,11 @@ If a mark is hidden, a new unfiltered view reveals it.
 F8 lists marks. da deletes mark a from the timeline or F8.
 No Vim text registers are implemented.
 
-x excludes the selected pathname; X edits a directory exclusion.
+x excludes all SPACE-selected pathnames, or the focused pathname without a selection.
+X edits a directory exclusion for the focused entry.
 In X: Backspace goes up one directory; Enter excludes its subtree.
 Type to edit; Delete erases a character; Ctrl+U clears the path.
-u removes the most recent exclusion.
+u removes the most recent exclusion, including a whole batch.
 c collapses consecutive dense seconds on the selected host, across all paths.
 Each second must exceed the threshold (default 100 events/s). No gaps are bridged.
 C edits the threshold. c or ENTER/F3 on a summary expands it.
@@ -157,6 +168,7 @@ struct Pending {
 #[derive(Clone, Copy, PartialEq)]
 enum FormKind {
     Burst,
+    Goto,
     Time,
     Filters,
     Directory,
@@ -204,6 +216,7 @@ pub struct App {
     dirty_session: bool,
     mouse_enabled: bool,
     mouse_state: MouseState,
+    selected_records: BTreeMap<i64, Row>,
 }
 
 impl Default for App {
@@ -226,6 +239,7 @@ impl Default for App {
             dirty_session: false,
             mouse_enabled: true,
             mouse_state: MouseState::default(),
+            selected_records: BTreeMap::new(),
         }
     }
 }
@@ -256,6 +270,99 @@ impl App {
     }
     fn selected_event(&self) -> Option<&Row> {
         self.selected().and_then(DisplayRow::event)
+    }
+    fn toggle_record_selection(&mut self) {
+        let Some(row) = self.selected_event() else {
+            self.status = if self.selected().is_some() {
+                "Expand the burst to select individual files"
+            } else {
+                "No event selected"
+            }
+            .into();
+            return;
+        };
+        let row = row.clone();
+        match self.selected_records.entry(row.key.record) {
+            Entry::Occupied(entry) => {
+                entry.remove();
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(row);
+            }
+        }
+        self.status = if self.selected_records.is_empty() {
+            "Selection cleared".into()
+        } else {
+            "SPACE toggles selection · TAB/F2 tag · x excludes · Esc clears".into()
+        };
+    }
+    fn assessment_target(&self) -> Option<&Row> {
+        if self.selected_records.is_empty() {
+            self.selected_event()
+        } else {
+            self.selected_event()
+                .and_then(|row| self.selected_records.get(&row.key.record))
+                .or_else(|| self.selected_records.values().next())
+        }
+    }
+    fn apply_tag(&mut self, tag: Option<Tag>) -> Vec<Action> {
+        let records = if self.selected_records.is_empty() {
+            let Some(row) = self.selected_event() else {
+                self.status = "Expand the burst to assess an individual record".into();
+                return vec![];
+            };
+            vec![row.key.record]
+        } else {
+            self.selected_records.keys().copied().collect()
+        };
+        if let Some(tag) = tag {
+            for row in self.rows.iter_mut().filter_map(DisplayRow::event_mut) {
+                if records.binary_search(&row.key.record).is_ok() {
+                    row.tag = tag;
+                    row.automatic = false;
+                }
+            }
+            for row in self.selected_records.values_mut() {
+                row.tag = tag;
+                row.automatic = false;
+            }
+        }
+        vec![Action::Command(if records.len() == 1 {
+            Command::Tag(records[0], tag)
+        } else {
+            Command::TagMany(records, tag)
+        })]
+    }
+    fn tags_changed(&mut self, changes: &[TagChange]) -> Vec<Action> {
+        let mut candidate = self
+            .pending
+            .as_ref()
+            .and_then(|pending| pending.candidate.clone());
+        for change in changes {
+            for (key, _) in &change.events {
+                if let Some(row) = self.selected_records.get_mut(&key.record) {
+                    row.tag = change.after;
+                }
+            }
+            for view in self
+                .session
+                .views
+                .iter_mut()
+                .chain(self.previous.iter_mut().map(|(_, view)| view))
+                .chain(candidate.iter_mut())
+            {
+                if burst::apply_tag_change(view, change).is_err() {
+                    view.bursts.clear();
+                }
+            }
+        }
+        let anchor = self
+            .rows
+            .get(self.top)
+            .map(DisplayRow::key)
+            .or(self.view().top);
+        let focus = self.selected().map(DisplayRow::key).or(self.view().top);
+        vec![self.load(Load::Filter(focus), candidate, anchor, true)]
     }
     fn load_around(&mut self, focus: EventKey, mut view: View) -> Action {
         let context_before = self
@@ -359,6 +466,7 @@ impl App {
     }
     fn switch(&mut self, active: usize) -> Action {
         self.remember();
+        self.selected_records.clear();
         self.session.active = active;
         self.rows.clear();
         self.top = 0;
@@ -366,6 +474,7 @@ impl App {
     }
     fn open_view(&mut self, view: View) -> Action {
         self.remember();
+        self.selected_records.clear();
         self.session.views.push(view);
         self.session.active = self.session.views.len() - 1;
         self.rows.clear();
@@ -648,6 +757,15 @@ impl App {
                     // selection. Seek directly to its key instead of losing it.
                     return vec![self.load(mode, candidate, Some(focus), true)];
                 }
+                if candidate.as_ref().is_some_and(|view| {
+                    view.predicate != self.view().predicate
+                        || view.after != self.view().after
+                        || view.before != self.view().before
+                        || view.time_mask != self.view().time_mask
+                        || view.bogus != self.view().bogus
+                }) {
+                    self.selected_records.clear();
+                }
                 match mode {
                     Load::DetectBurst | Load::FindJump(_) => unreachable!(),
                     Load::CenterJump(focus) => {
@@ -788,6 +906,7 @@ impl App {
                 self.pending = None;
                 let Some(target) = target else {
                     self.status = match jump {
+                        Jump::Goto(_) => "No matching event at or after the requested date/time",
                         Jump::TimeBoundary(_) => {
                             "No matching event at or after the next time boundary"
                         }
@@ -840,26 +959,10 @@ impl App {
                 view.bursts.push(burst);
                 vec![self.load_around(first, view)]
             }
-            Message::Tagged(change) => {
-                for view in self
-                    .session
-                    .views
-                    .iter_mut()
-                    .chain(self.previous.iter_mut().map(|(_, view)| view))
-                {
-                    if burst::apply_tag_change(view, &change).is_err() {
-                        view.bursts.clear();
-                    }
-                }
-                let anchor = self
-                    .rows
-                    .get(self.top)
-                    .map(DisplayRow::key)
-                    .or(self.view().top);
-                let focus = self.selected().map(DisplayRow::key).or(self.view().top);
-                vec![self.load(Load::Filter(focus), None, anchor, true)]
-            }
+            Message::Tagged(change) => self.tags_changed(&[change]),
+            Message::TaggedMany(changes) => self.tags_changed(&changes),
             Message::Changed => {
+                self.selected_records.clear();
                 for view in &mut self.session.views {
                     view.bursts.clear();
                 }
@@ -906,6 +1009,7 @@ impl App {
     }
     fn form(&mut self, kind: FormKind) {
         let fields: Vec<(&str, String)> = match kind {
+            FormKind::Goto => vec![("ISO date/time", String::new())],
             FormKind::Burst => vec![(
                 "More than this many events per second",
                 self.session.burst_threshold.to_string(),
@@ -976,10 +1080,23 @@ impl App {
             active: 0,
             error: String::new(),
         }));
+        if kind == FormKind::Goto
+            && let Some(Modal::Form(form)) = &mut self.modal
+        {
+            form.fields[0].0 = format!("ISO date/time (no offset = {})", self.session.timezone);
+        }
     }
     fn apply_form(&mut self, form: &Form) -> Result<Vec<Action>> {
         let value = |i: usize| form.fields[i].1.trim();
         match form.kind {
+            FormKind::Goto => {
+                let tz = self.session.timezone.parse()?;
+                let epoch = parse_goto(value(0), tz)?;
+                if self.pending.is_some() {
+                    bail!("Wait for the current query to finish, then press Enter");
+                }
+                Ok(vec![self.find_jump(Jump::Goto(epoch))])
+            }
             FormKind::Burst => {
                 let threshold: u64 = value(0).parse().map_err(|_| {
                     anyhow::anyhow!("Enter a positive whole number of events per second")
@@ -1124,6 +1241,7 @@ impl App {
                 self.status = "Cancelled".into();
             }
             if self.modal.take().is_none() {
+                self.selected_records.clear();
                 self.pending = None;
                 self.status = "Cancelled".into();
                 self.generation += 1;
@@ -1153,6 +1271,27 @@ impl App {
                     self.modal = Some(Modal::Text(title, text, scroll));
                 }
                 Modal::Form(mut form) => {
+                    if form.kind == FormKind::Goto
+                        && form.fields[0].1.is_empty()
+                        && form.error.is_empty()
+                        && key.modifiers.difference(KeyModifiers::SHIFT).is_empty()
+                        && matches!(key.code, KeyCode::Char('g' | 't' | 'T'))
+                    {
+                        if key.kind == KeyEventKind::Repeat {
+                            self.modal = Some(Modal::Form(form));
+                            return vec![];
+                        }
+                        return vec![match key.code {
+                            KeyCode::Char('g') => self.load(Load::Replace, None, None, true),
+                            KeyCode::Char('t') => {
+                                self.switch((self.session.active + 1) % self.session.views.len())
+                            }
+                            _ => self.switch(
+                                (self.session.active + self.session.views.len() - 1)
+                                    % self.session.views.len(),
+                            ),
+                        }];
+                    }
                     match key.code {
                         KeyCode::Tab | KeyCode::Down => {
                             form.active = (form.active + 1) % form.fields.len()
@@ -1212,7 +1351,7 @@ impl App {
                 Modal::Tags => {
                     if key.code == KeyCode::Char('r') {
                         self.form(FormKind::Reload);
-                    } else if let Some(record) = self.selected_event().map(|r| r.key.record) {
+                    } else {
                         let tag = match key.code {
                             KeyCode::Char('0') => Some(Some(Tag::None)),
                             KeyCode::Char('1') => Some(Some(Tag::Suspicious)),
@@ -1222,7 +1361,7 @@ impl App {
                             _ => None,
                         };
                         if let Some(tag) = tag {
-                            return vec![Action::Command(Command::Tag(record, tag))];
+                            return self.apply_tag(tag);
                         }
                         self.modal = Some(Modal::Tags);
                     }
@@ -1254,6 +1393,7 @@ impl App {
                             }
                         }
                         self.session.views.remove(self.session.active);
+                        self.selected_records.clear();
                         self.session.active = self.session.active.min(self.session.views.len() - 1);
                         self.rows.clear();
                         self.top = 0;
@@ -1328,18 +1468,6 @@ impl App {
                     self.status = "Unknown z shortcut: use zt, zz, or zb".into();
                     return vec![];
                 }
-                ('g', KeyCode::Char('g')) => {
-                    return vec![self.load(Load::Replace, None, None, true)];
-                }
-                ('g', KeyCode::Char('t')) => {
-                    return vec![self.switch((self.session.active + 1) % self.session.views.len())];
-                }
-                ('g', KeyCode::Char('T')) => {
-                    return vec![self.switch(
-                        (self.session.active + self.session.views.len() - 1)
-                            % self.session.views.len(),
-                    )];
-                }
                 ('m', KeyCode::Char(name @ 'a'..='z')) => {
                     if let Some(key) = self.selected().map(|r| r.key()) {
                         self.session.bookmarks.retain(|m| m.name != name);
@@ -1359,6 +1487,7 @@ impl App {
                     if let Some((index, view)) = self.previous.take() {
                         self.previous = Some((self.session.active, self.view().clone()));
                         if index < self.session.views.len() {
+                            self.selected_records.clear();
                             self.session.active = index;
                             self.session.views[index] = view;
                             self.rows.clear();
@@ -1392,7 +1521,10 @@ impl App {
                     return vec![self.switch(active)];
                 }
             }
-            KeyCode::Char('g' | 'm' | '\'') => {
+            KeyCode::Char('g') if key.modifiers.is_empty() && key.kind == KeyEventKind::Press => {
+                self.form(FormKind::Goto);
+            }
+            KeyCode::Char('m' | '\'') => {
                 if let KeyCode::Char(c) = key.code {
                     self.prefix = Some(c);
                     self.status = format!("{c}…");
@@ -1427,17 +1559,12 @@ impl App {
                     .into_iter()
                     .collect();
             }
+            KeyCode::Char(' ') if key.modifiers.is_empty() && key.kind == KeyEventKind::Press => {
+                self.toggle_record_selection();
+            }
             KeyCode::Tab => {
-                if let Some((record, tag)) =
-                    self.selected_event().map(|r| (r.key.record, r.tag.next()))
-                {
-                    for row in self.rows.iter_mut().filter_map(DisplayRow::event_mut) {
-                        if row.key.record == record {
-                            row.tag = tag;
-                            row.automatic = false;
-                        }
-                    }
-                    return vec![Action::Command(Command::Tag(record, Some(tag)))];
+                if let Some(tag) = self.assessment_target().map(|row| row.tag.next()) {
+                    return self.apply_tag(Some(tag));
                 }
                 self.status = "Expand the burst to assess an individual record".into();
             }
@@ -1476,8 +1603,24 @@ impl App {
             }
             KeyCode::Char('X') => self.form(FormKind::Directory),
             KeyCode::Char('x') => {
-                if let Some(path) = self.selected_event().map(|r| r.path.clone()) {
-                    let pattern = format!("^{}$", regex::escape(&path));
+                let paths: BTreeSet<_> = if self.selected_records.is_empty() {
+                    self.selected_event()
+                        .into_iter()
+                        .map(|row| row.path.as_str())
+                        .collect()
+                } else {
+                    self.selected_records
+                        .values()
+                        .map(|row| row.path.as_str())
+                        .collect()
+                };
+                if !paths.is_empty() {
+                    let paths: Vec<_> = paths.into_iter().map(regex::escape).collect();
+                    let pattern = if paths.len() == 1 {
+                        format!("^{}$", paths[0])
+                    } else {
+                        format!("^(?:{})$", paths.join("|"))
+                    };
                     let mut view = self.requested_view().clone();
                     if !view.predicate.exclude.contains(&pattern) {
                         view.predicate.exclude.push(pattern);

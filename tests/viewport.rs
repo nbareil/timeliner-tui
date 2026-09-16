@@ -67,6 +67,179 @@ fn assert_selection(app: &App, id: i64, slot: usize) {
     assert_eq!(view.top, Some(app.rows[app.top].key()));
 }
 
+fn goto(app: &mut App, text: &str) -> PageRequest {
+    assert!(key(app, KeyCode::Char('g')).is_empty());
+    for character in text.chars() {
+        assert!(key(app, KeyCode::Char(character)).is_empty());
+    }
+    page(key(app, KeyCode::Enter))
+}
+
+#[test]
+fn goto_centers_the_destination_preserves_filters_and_saves_the_return_location() {
+    for (text, expected) in [
+        ("2026-09-16T12:34:56Z", "2026-09-16T12:34:56Z"),
+        ("2026-09-16T12:34:56+02:00", "2026-09-16T10:34:56Z"),
+        ("2026-09-16T12:34", "2026-09-16T06:49:00Z"),
+        ("2026-09-16", "2026-09-15T18:15:00Z"),
+    ] {
+        let mut app = loaded(0..128, 10);
+        app.session.timezone = "Asia/Kathmandu".into();
+        app.session.views[0].predicate.include = "/tmp/".into();
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        let request = goto(&mut app, text);
+        assert_eq!(
+            request.jump,
+            Some(Jump::Goto(
+                chrono::DateTime::parse_from_rfc3339(expected)
+                    .unwrap()
+                    .timestamp()
+            ))
+        );
+        assert_eq!(request.view.predicate.include, "/tmp/");
+        assert_eq!(app.top, 40);
+        let centered = time_target(&mut app, &request, 2064);
+        app.message(Message::Page(centered.generation, rows(2000..2128)));
+        assert_selection(&app, 2064, 4);
+        key(&mut app, KeyCode::Char('\''));
+        let previous = page(key(&mut app, KeyCode::Char('\'')));
+        assert_eq!(previous.anchor, Some(event(40)));
+        assert_eq!(previous.view.predicate.include, "/tmp/");
+    }
+}
+
+#[test]
+fn goto_validation_and_escape_preserve_the_view_and_file_selection() {
+    let mut app = loaded(0..128, 10);
+    key(&mut app, KeyCode::Char(' '));
+    key(&mut app, KeyCode::Char('j'));
+    key(&mut app, KeyCode::Char(' '));
+    let original = app.rows[app.top + app.session.views[0].selected].key();
+    key(&mut app, KeyCode::Char('g'));
+    assert!(key(&mut app, KeyCode::Enter).is_empty());
+    for character in "2026-02-30".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    assert!(key(&mut app, KeyCode::Enter).is_empty());
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(text.contains("Goto date/time"));
+    assert!(text.contains("2026-02-30"));
+    assert!(text.contains("Use YYYY-MM-DD"));
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        original
+    );
+    app.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+    for character in "2026-09-16T12:34:56Z".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    let request = page(key(&mut app, KeyCode::Enter));
+    key(&mut app, KeyCode::Esc);
+    assert!(
+        app.message(Message::JumpTarget(request.generation, None))
+            .is_empty()
+    );
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        original
+    );
+
+    key(&mut app, KeyCode::Char(' '));
+    key(&mut app, KeyCode::Char('k'));
+    key(&mut app, KeyCode::Char(' '));
+    key(&mut app, KeyCode::Char('g'));
+    key(&mut app, KeyCode::Esc);
+    assert!(matches!(key(&mut app, KeyCode::Tab).as_slice(),
+        [Action::Command(Command::TagMany(records, Some(Tag::Suspicious)))] if records == &[0, 1]));
+}
+
+#[test]
+fn goto_without_matches_or_with_a_query_error_keeps_the_current_position() {
+    for error in [false, true] {
+        let mut app = loaded(0..128, 10);
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        let request = goto(&mut app, "2026-09-16T12:34:56Z");
+        let message = if error {
+            Message::QueryError(request.generation, "Search failed".into())
+        } else {
+            Message::JumpTarget(request.generation, None)
+        };
+        assert!(app.message(message).is_empty());
+        assert_eq!(app.top, 40);
+        assert_eq!(app.session.views[0].selected, 3);
+        assert!(app.status.contains(if error {
+            "Search failed"
+        } else {
+            "requested date/time"
+        }));
+    }
+    // A destination can be entered even when the current page has no events.
+    let mut empty = loaded(0..0, 10);
+    assert!(matches!(
+        goto(&mut empty, "2026-09-16").jump,
+        Some(Jump::Goto(_))
+    ));
+}
+
+#[test]
+fn goto_waits_for_pending_filters_and_leaves_other_forms_alone() {
+    let mut app = loaded(0..128, 10);
+    let pending = page(key(&mut app, KeyCode::Char('x')));
+    key(&mut app, KeyCode::Char('g'));
+    for character in "2026-09-16".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    assert!(key(&mut app, KeyCode::Enter).is_empty());
+    app.message(Message::Page(pending.generation, rows(1..128)));
+    let request = page(key(&mut app, KeyCode::Enter));
+    assert_eq!(
+        request.view.predicate.exclude,
+        pending.view.predicate.exclude
+    );
+    key(&mut app, KeyCode::Esc);
+    key(&mut app, KeyCode::F(5));
+    key(&mut app, KeyCode::Char('g'));
+    let filter = page(key(&mut app, KeyCode::Enter));
+    assert_eq!(filter.view.predicate.include, "g");
+}
+
+#[test]
+fn goto_keeps_gg_gt_and_shifted_g_t_and_ignores_held_g() {
+    use crossterm::event::KeyEventKind;
+    for (suffix, modifiers, active) in [
+        ('g', KeyModifiers::NONE, 0),
+        ('t', KeyModifiers::NONE, 1),
+        ('T', KeyModifiers::SHIFT, 1),
+    ] {
+        let mut app = loaded(0..128, 10);
+        key(&mut app, KeyCode::Char('g'));
+        assert!(
+            app.key(KeyEvent::new_with_kind(
+                KeyCode::Char('g'),
+                KeyModifiers::NONE,
+                KeyEventKind::Repeat
+            ))
+            .is_empty()
+        );
+        let request = page(app.key(KeyEvent::new(KeyCode::Char(suffix), modifiers)));
+        assert!(request.jump.is_none());
+        assert_eq!(app.session.active, active);
+        if suffix == 'g' {
+            assert_eq!(request.anchor, None);
+        }
+    }
+}
+
 #[test]
 fn arrows_keep_the_selected_event_until_it_leaves_the_screen() {
     for (code, slots, last_event, last_slot) in [

@@ -435,6 +435,86 @@ fn fold(fixture: &Fixture, app: &mut App) {
 }
 
 #[test]
+fn goto_finds_the_first_filtered_event_at_or_after_the_requested_instant() {
+    let fixture = Fixture::new(&[(0, 8, 2), (2, 9, 2), (4, 2, 2)]);
+    let mut view = View {
+        after: Some(BASE + 1),
+        before: Some(BASE + 3),
+        time_mask: 1,
+        ..View::default()
+    };
+    view.predicate.include = "/usr/lib/".into();
+    view.predicate.hosts = vec!["host-a".into()];
+    let expected = fixture.raw(&view)[0].clone();
+    for instant in [BASE, BASE + 1, BASE + 2] {
+        let target = Jump::Goto(instant)
+            .find(&fixture.store, &view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.key, expected.key);
+        assert_eq!(target.key.epoch, BASE + 2);
+    }
+    assert!(
+        Jump::Goto(BASE + 3)
+            .find(&fixture.store, &view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .is_none()
+    );
+    view.predicate.tags = Some(vec![Tag::Malicious]);
+    assert!(
+        Jump::Goto(BASE)
+            .find(&fixture.store, &view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .is_none()
+    );
+    fixture
+        .store
+        .set_tag(expected.key.record, Some(Tag::Malicious))
+        .unwrap();
+    assert_eq!(
+        Jump::Goto(BASE)
+            .find(&fixture.store, &view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .unwrap()
+            .key,
+        expected.key
+    );
+}
+
+#[test]
+fn goto_reveals_a_folded_destination_and_return_restores_the_fold() {
+    let fixture = Fixture::new(&[(0, 8, 0), (1, 9, 0), (4, 2, 0)]);
+    let raw = fixture.raw(&View::default());
+    let mut app = loaded(&fixture, raw[0].key);
+    fold(&fixture, &mut app);
+    let folded = app.session.views[0].bursts.clone();
+    let expected = raw
+        .iter()
+        .find(|row| row.key.epoch == BASE + 1)
+        .unwrap()
+        .key;
+    let text = chrono::DateTime::from_timestamp(BASE + 1, 0)
+        .unwrap()
+        .to_rfc3339();
+    key(&mut app, KeyCode::Char('g'));
+    for character in text.chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    let find = request(key(&mut app, KeyCode::Enter));
+    assert_eq!(find.jump, Some(Jump::Goto(BASE + 1)));
+    let centered = request(apply_query(&fixture, &mut app, find));
+    assert!(apply_query(&fixture, &mut app, centered).is_empty());
+    let selected = &app.rows[app.top + app.session.views[0].selected];
+    assert_eq!(selected.key(), expected);
+    assert!(selected.event().is_some());
+    assert!(app.session.views[0].bursts.is_empty());
+    key(&mut app, KeyCode::Char('\''));
+    let previous = request(key(&mut app, KeyCode::Char('\'')));
+    assert!(apply_query(&fixture, &mut app, previous).is_empty());
+    assert_eq!(app.session.views[0].bursts, folded);
+}
+
+#[test]
 fn collapse_keeps_previous_entries_visible_for_k_navigation() {
     let fixture = Fixture::new(&[(0, 4, 0), (1, 180, 0), (2, 240, 0), (3, 5, 0)]);
     let raw = fixture.raw(&View::default());
@@ -790,6 +870,35 @@ fn update_tag(fixture: &Fixture, app: &mut App, record: i64, tag: Option<Tag>) {
     query::update_caches(&fixture.store, record, revision).unwrap();
     let page = request(app.message(Message::Tagged(change)));
     assert!(apply_query(fixture, app, page).is_empty());
+}
+
+#[test]
+fn batch_tagging_selected_members_updates_a_fold_without_expanding_it() {
+    let fixture = Fixture::new(&[(0, 8, 0), (1, 9, 0)]);
+    let origin = fixture.raw(&View::default())[0].key;
+    let mut app = loaded(&fixture, origin);
+    key(&mut app, KeyCode::Char(' '));
+    key(&mut app, KeyCode::Char('j'));
+    key(&mut app, KeyCode::Char(' '));
+    fold(&fixture, &mut app);
+    assert_eq!(app.session.views[0].bursts[0].tagged, 0);
+    // A summary cannot itself join the selection.
+    key(&mut app, KeyCode::Char(' '));
+    let actions = key(&mut app, KeyCode::Tab);
+    let [Action::Command(Command::TagMany(records, tag))] = actions.as_slice() else {
+        panic!("Expected assessment of the selected members")
+    };
+    assert_eq!(records.len(), 2);
+    let revision = fixture.store.revision().unwrap();
+    let changes = fixture.store.set_tags(records, *tag).unwrap();
+    query::update_caches_for_records(&fixture.store, records, revision).unwrap();
+    let page = request(app.message(Message::TaggedMany(changes)));
+    assert!(apply_query(&fixture, &mut app, page).is_empty());
+    assert_eq!(app.session.views[0].bursts.len(), 1);
+    let DisplayRow::Burst(burst) = &app.rows[app.top + app.session.views[0].selected] else {
+        panic!("Expected the updated summary")
+    };
+    assert_eq!(burst.tagged, 2);
 }
 
 #[test]

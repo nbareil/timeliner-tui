@@ -11,6 +11,7 @@ use chrono_tz::{GapInfo, Tz};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Jump {
+    Goto(i64),
     TimeBoundary(i64),
     PreviousTimeBoundary(i64),
     TaggedAfter(EventKey),
@@ -29,7 +30,7 @@ impl Jump {
         let mut view = view.clone();
         let reverse = matches!(self, Self::PreviousTimeBoundary(_) | Self::TaggedBefore(_));
         let (anchor, inclusive) = match self {
-            Self::TimeBoundary(epoch) | Self::PreviousTimeBoundary(epoch) => (
+            Self::Goto(epoch) | Self::TimeBoundary(epoch) | Self::PreviousTimeBoundary(epoch) => (
                 EventKey {
                     epoch,
                     record: if reverse { i64::MAX } else { i64::MIN },
@@ -62,6 +63,43 @@ impl Jump {
         )
         .map(|mut rows| rows.pop())
     }
+}
+
+/// Parse a Goto destination, using the display timezone for input without an offset.
+pub fn parse_goto(text: &str, tz: Tz) -> Result<i64> {
+    let text = text.trim();
+    ensure!(!text.is_empty(), "Enter an ISO date or date/time");
+    let datetime = if let Ok(datetime) = DateTime::parse_from_rfc3339(text) {
+        datetime
+    } else {
+        let local = NaiveDate::parse_from_str(text, "%Y-%m-%d")
+            .ok()
+            .and_then(|date| date.and_hms_opt(0, 0, 0))
+            .or_else(|| {
+                [
+                    "%Y-%m-%dT%H:%M:%S%.f",
+                    "%Y-%m-%dT%H:%M",
+                    "%Y-%m-%d %H:%M:%S%.f",
+                    "%Y-%m-%d %H:%M",
+                ]
+                .iter()
+                .find_map(|format| NaiveDateTime::parse_from_str(text, format).ok())
+            })
+            .context("Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS[Z/±HH:MM]")?;
+        tz.from_local_datetime(&local)
+            .single()
+            .with_context(|| {
+                format!(
+                    "Ambiguous or nonexistent local time in {tz}; include Z or an explicit offset"
+                )
+            })?
+            .fixed_offset()
+    };
+    // Events have whole-second precision; fractional input must not land before it.
+    datetime
+        .timestamp()
+        .checked_add(i64::from(datetime.timestamp_subsec_nanos() != 0))
+        .context(RANGE_ERROR)
 }
 
 #[derive(Clone, Copy)]

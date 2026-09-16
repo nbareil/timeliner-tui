@@ -1,8 +1,70 @@
 use chrono::{DateTime, Utc};
-use timeliner_tui::navigation::TimeUnit;
+use timeliner_tui::navigation::{TimeUnit, parse_goto};
 
 fn epoch(text: &str) -> i64 {
     DateTime::parse_from_rfc3339(text).unwrap().timestamp()
+}
+
+#[test]
+fn goto_accepts_iso_dates_local_times_and_explicit_offsets() {
+    for (text, expected) in [
+        ("2026-09-16", "2026-09-15T18:15:00Z"),
+        ("2026-09-16T12:34", "2026-09-16T06:49:00Z"),
+        ("2026-09-16 12:34", "2026-09-16T06:49:00Z"),
+        ("2026-09-16T12:34:56", "2026-09-16T06:49:56Z"),
+        ("2026-09-16 12:34:56", "2026-09-16T06:49:56Z"),
+        ("2026-09-16T12:34:56Z", "2026-09-16T12:34:56Z"),
+        ("2026-09-16T12:34:56+02:00", "2026-09-16T10:34:56Z"),
+        ("2026-09-16T12:34:56-03:30", "2026-09-16T16:04:56Z"),
+        (" 2026-09-16T12:34:56Z ", "2026-09-16T12:34:56Z"),
+    ] {
+        assert_eq!(
+            parse_goto(text, chrono_tz::Asia::Kathmandu).unwrap(),
+            epoch(expected),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn goto_fractional_seconds_never_jump_before_the_requested_instant() {
+    for (text, expected) in [
+        ("2026-09-16T12:34:56.000Z", "2026-09-16T12:34:56Z"),
+        ("2026-09-16T12:34:56.000000001Z", "2026-09-16T12:34:57Z"),
+        ("2026-09-16T12:34:56.5", "2026-09-16T12:34:57Z"),
+        ("2026-09-16 12:34:56.5", "2026-09-16T12:34:57Z"),
+        ("1969-12-31T23:59:59.5Z", "1970-01-01T00:00:00Z"),
+    ] {
+        assert_eq!(
+            parse_goto(text, chrono_tz::UTC).unwrap(),
+            epoch(expected),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn goto_rejects_invalid_dates_and_requires_offsets_for_dst_ambiguities() {
+    for text in [
+        "",
+        " ",
+        "tomorrow",
+        "2026-02-30",
+        "2026-09-16T25:00:00",
+        "2026-09-16T12:34:56+25:00",
+    ] {
+        assert!(parse_goto(text, chrono_tz::UTC).is_err(), "{text}");
+    }
+    for text in ["2026-03-08T02:30:00", "2026-11-01T01:30:00"] {
+        let error = parse_goto(text, chrono_tz::America::New_York).unwrap_err();
+        assert!(error.to_string().contains("explicit offset"));
+    }
+    for text in ["2026-11-01T01:30:00-04:00", "2026-11-01T01:30:00-05:00"] {
+        assert_eq!(
+            parse_goto(text, chrono_tz::America::New_York).unwrap(),
+            epoch(text)
+        );
+    }
 }
 
 fn check(unit: TimeUnit, timezone: &str, from: &str, expected: &str) {

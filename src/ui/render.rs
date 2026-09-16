@@ -232,7 +232,7 @@ impl App {
             _ => 26,
         };
         let widths = [
-            Constraint::Length(1),
+            Constraint::Length(2),
             Constraint::Length(19),
             Constraint::Length(host_width),
             Constraint::Length(4),
@@ -289,6 +289,15 @@ impl App {
                 frame.render_widget(
                     Paragraph::new(if bookmarked { "●" } else { "▌" }).style(base.fg(p.accent)),
                     cells[0],
+                );
+            }
+            if row
+                .event()
+                .is_some_and(|row| self.selected_records.contains_key(&row.key.record))
+            {
+                frame.render_widget(
+                    Paragraph::new("✓").style(base.fg(p.accent).add_modifier(Modifier::BOLD)),
+                    Rect::new(cells[0].x + 1, area.y, 1, 1).intersection(cells[0]),
                 );
             }
             let timestamp = tz
@@ -436,18 +445,35 @@ impl App {
 
     fn draw_status(&self, frame: &mut Frame, area: Rect, p: Palette) {
         let busy = !self.ready || self.pending.is_some();
-        let state = Line::from(vec![
-            label(
-                if busy { "  ◌ " } else { "  ● " },
-                if busy { p.accent } else { p.teal },
-            ),
-            label(display_text(&self.status), p.muted),
-        ]);
+        let mut state = vec![label(
+            if busy { "  ◌ " } else { "  ● " },
+            if busy { p.accent } else { p.teal },
+        )];
+        if !self.selected_records.is_empty() {
+            state.push(label(
+                format!(
+                    "{} file{} selected · ",
+                    self.selected_records.len(),
+                    if self.selected_records.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                ),
+                p.accent,
+            ));
+        }
+        state.push(label(display_text(&self.status), p.muted));
+        let state = Line::from(state);
         let hints = Line::from(vec![
             label("  ↑↓ ", p.accent),
             label("scroll   ", p.muted),
             label("j/k ", p.accent),
             label("select   ", p.muted),
+            label("SPACE ", p.accent),
+            label("toggle   ", p.muted),
+            label("g ", p.accent),
+            label("goto   ", p.muted),
             label("TAB ", p.violet),
             label("tag   ", p.muted),
             label("ENTER ", p.accent),
@@ -505,8 +531,12 @@ impl App {
                 area.height.saturating_sub(4),
             ),
             Modal::Tags => (
-                "Assess record",
-                "Changes apply to every event for this record",
+                if self.selected_records.is_empty() {
+                    "Assess record"
+                } else {
+                    "Assess selected files"
+                },
+                "Changes apply to every event for the affected records",
                 82,
                 17,
             ),
@@ -520,6 +550,7 @@ impl App {
             Modal::Form(form) => (
                 match form.kind {
                     FormKind::Burst => "Burst threshold",
+                    FormKind::Goto => "Goto date/time",
                     FormKind::Time => "Timeframe",
                     FormKind::Filters => "Filter timeline",
                     FormKind::Directory => "Exclude directory",
@@ -527,7 +558,9 @@ impl App {
                     FormKind::Reload => "IOC rules",
                     FormKind::Rename => "Rename view",
                 },
-                if form.kind == FormKind::Directory {
+                if form.kind == FormKind::Goto {
+                    "Enter jumps to the first match at or after this time"
+                } else if form.kind == FormKind::Directory {
                     "Backspace parent directory · Enter exclude"
                 } else {
                     "Tab next field · Ctrl+U clear · Enter apply"
@@ -688,7 +721,19 @@ impl App {
                     menu("r", "Reload IOC rules", "Choose a YAML file", p.accent, p),
                     Line::from(""),
                     Line::from(label(
-                        "TAB cycles assessments directly in the timeline.",
+                        if self.selected_records.is_empty() {
+                            "TAB cycles assessments directly in the timeline.".into()
+                        } else {
+                            format!(
+                                "Applies to {} selected file{}.",
+                                self.selected_records.len(),
+                                if self.selected_records.len() == 1 {
+                                    ""
+                                } else {
+                                    "s"
+                                }
+                            )
+                        },
                         p.muted,
                     )),
                 ];
@@ -841,6 +886,8 @@ impl App {
                 if content.height > 1 {
                     let hint = if !form.error.is_empty() {
                         form.error.clone()
+                    } else if form.kind == FormKind::Goto {
+                        "2026-09-16T12:34:56Z · Empty: g start, t/T tabs · Ctrl+U clear".into()
                     } else if form.kind == FormKind::Filters {
                         "F2 add exclusion · Ctrl+D remove · Enter apply".into()
                     } else if form.kind == FormKind::Directory {
