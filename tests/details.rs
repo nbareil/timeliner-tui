@@ -117,3 +117,48 @@ fn out_of_range_timestamps_remain_inspectable() {
     assert!(text.contains("Change time: 1970-01-01T00:00:00+00:00\n"));
     assert!(text.ends_with(&original));
 }
+
+#[test]
+fn uac_details_show_collected_hashes_with_source_lines_after_resuming() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("uac");
+    fs::create_dir_all(root.join("bodyfile")).unwrap();
+    fs::create_dir_all(root.join("hash_executables")).unwrap();
+    let original = "0|/usr/bin/tool|1|-rwxr-xr-x|0|0|10|100|200|300|400\n";
+    fs::write(root.join("bodyfile/bodyfile.txt"), original).unwrap();
+    let md5 = "0123456789abcdef0123456789abcdef";
+    let sha1 = "0123456789abcdef0123456789abcdef01234567";
+    fs::write(
+        root.join("hash_executables/hash_executables.md5"),
+        format!("{md5}  /usr/bin/tool\n"),
+    )
+    .unwrap();
+    fs::write(
+        root.join("hash_executables/hash_executables.sha1"),
+        format!("SHA1 (/usr/bin/tool) = {sha1}\n"),
+    )
+    .unwrap();
+    for inputs in [vec![source::resolve(&root, None, false).unwrap()], vec![]] {
+        let workers = Workers::start(dir.path().join("workspace"), inputs, None, None, None, None);
+        loop {
+            match workers
+                .messages
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+            {
+                Message::Ready(..) => break,
+                Message::Progress(..) => {}
+                Message::Error(error) => panic!("{error}"),
+                _ => panic!("Unexpected import message"),
+            }
+        }
+        let text = details(&workers, chrono_tz::UTC);
+        assert!(text.contains(&format!("UAC MD5: {md5}\n")));
+        assert!(text.contains(&format!("UAC SHA-1: {sha1}\n")));
+        assert!(text.contains("hash_executables.md5 (line 1)"));
+        assert!(text.contains("hash_executables.sha1 (line 1)"));
+        assert!(text.contains("Hash / original first field: 0\n"));
+        assert!(text.ends_with(original));
+        workers.shutdown();
+    }
+}

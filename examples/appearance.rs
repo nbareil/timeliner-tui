@@ -107,6 +107,24 @@ fn main() {
         },
     ];
     match args.get(1).map(String::as_str) {
+        Some("uac-details") => {
+            app.message(Message::Detail(concat!(
+                "Host: app-04\nSource #4: /case/uac-app-04/bodyfile/bodyfile.txt\n",
+                "Line: 18423  Byte offset: 2791240\nTag: MALICIOUS (manual)\nIOC rules: [3]\n\n",
+                "Hash / original first field: 0\nPath: /tmp/.cache/systemd-netd\n",
+                "Inode: 39182\nMode: -rwxr-xr-x\nUID: 0\nGID: 0\nSize: 48.22 KB\n",
+                "Access time: 2026-09-08T09:14:19+00:00\n",
+                "Modification time: 2026-09-08T09:14:19+00:00\n",
+                "Change time: 2026-09-08T09:14:22+00:00\n",
+                "Birth time: 2026-09-08T09:14:17+00:00\n",
+                "UAC MD5: 0123456789abcdef0123456789abcdef\n",
+                "UAC MD5 source: /case/uac-app-04/hash_executables/hash_executables.md5 (line 42)\n",
+                "UAC SHA-1: 0123456789abcdef0123456789abcdef01234567\n",
+                "UAC SHA-1 source: /case/uac-app-04/hash_executables/hash_executables.sha1 (line 42)\n\n",
+                "Original record (display escaped; export preserves bytes):\n",
+                "0|/tmp/.cache/systemd-netd|39182|-rwxr-xr-x|0|0|48216|1788858859|1788858859|1788858862|1788858857"
+            ).into()));
+        }
         Some("goto") => {
             app.key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
             for character in "2026-09-08T09:14:19Z".chars() {

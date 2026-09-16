@@ -8,6 +8,7 @@ use crate::{
     source::Input,
     store::Store,
     theme::Theme,
+    uac,
 };
 use anyhow::Result;
 use chrono::TimeZone;
@@ -203,67 +204,101 @@ impl Workers {
                             tx.send(Message::TaggedMany(changes))?;
                             Ok(())
                         })(),
-                        Command::Detail(id, timezone) => {
-                            (|| -> Result<()> {
-                                let detail = store.detail(id)?;
-                                let labels = [
-                                    "Hash / original first field",
-                                    "Path",
-                                    "Inode",
-                                    "Mode",
-                                    "UID",
-                                    "GID",
-                                    "Size",
-                                    "Access time",
-                                    "Modification time",
-                                    "Change time",
-                                    "Birth time",
-                                ];
-                                let mut text = format!(
-                                    "Host: {}\nSource #{}: {}\nLine: {}  Byte offset: {}\nTag: {} ({})\nIOC rules: {:?}\n\n",
-                                    detail.host,
-                                    detail.source.id,
-                                    detail.source.path.display(),
-                                    detail.line,
-                                    detail.offset,
-                                    detail.tag.label(),
-                                    if detail.manual { "manual" } else { "automatic" },
-                                    detail.matches
-                                );
-                                for (index, (label, value)) in
-                                    labels.iter().zip(&detail.record.fields).enumerate()
-                                {
-                                    let value = if index == 6 {
-                                        format_file_size(value.parse::<u64>()?)
-                                    } else if index >= 7 {
-                                        let epoch = detail.record.times[index - 7];
-                                        timezone
-                                            .timestamp_opt(epoch, 0)
-                                            .single()
-                                            .map(|date| date.to_rfc3339())
-                                            .unwrap_or_else(|| {
-                                                format!("{epoch} (outside supported date range)")
-                                            })
-                                    } else {
-                                        value.clone()
-                                    };
-                                    text.push_str(&format!("{label}: {value}\n"));
-                                }
-                                let rules = store.rules()?;
-                                for index in &detail.matches {
-                                    if let Some(rule) = rules.rules.get(*index) {
+                        Command::Detail(id, timezone) => (|| -> Result<()> {
+                            let detail = store.detail(id)?;
+                            let labels = [
+                                "Hash / original first field",
+                                "Path",
+                                "Inode",
+                                "Mode",
+                                "UID",
+                                "GID",
+                                "Size",
+                                "Access time",
+                                "Modification time",
+                                "Change time",
+                                "Birth time",
+                            ];
+                            let mut text = format!(
+                                "Host: {}\nSource #{}: {}\nLine: {}  Byte offset: {}\nTag: {} ({})\nIOC rules: {:?}\n\n",
+                                detail.host,
+                                detail.source.id,
+                                detail.source.path.display(),
+                                detail.line,
+                                detail.offset,
+                                detail.tag.label(),
+                                if detail.manual { "manual" } else { "automatic" },
+                                detail.matches
+                            );
+                            for (index, (label, value)) in
+                                labels.iter().zip(&detail.record.fields).enumerate()
+                            {
+                                let value = if index == 6 {
+                                    format_file_size(value.parse::<u64>()?)
+                                } else if index >= 7 {
+                                    let epoch = detail.record.times[index - 7];
+                                    timezone
+                                        .timestamp_opt(epoch, 0)
+                                        .single()
+                                        .map(|date| date.to_rfc3339())
+                                        .unwrap_or_else(|| {
+                                            format!("{epoch} (outside supported date range)")
+                                        })
+                                } else {
+                                    value.clone()
+                                };
+                                text.push_str(&format!("{label}: {value}\n"));
+                            }
+                            let cancel = Cancellation {
+                                clock: job_clock.clone(),
+                                generation: job_clock.load(Ordering::Relaxed),
+                            };
+                            match uac::executable_hashes(
+                                &store,
+                                &detail.source,
+                                &detail.record.fields[1],
+                                &cancel,
+                            ) {
+                                Ok(Some(hashes)) => {
+                                    if hashes.values.is_empty() && hashes.warnings.is_empty() {
+                                        text.push_str("UAC executable hashes: Not recorded for this pathname\n");
+                                    }
+                                    for hash in hashes.values {
                                         text.push_str(&format!(
-                                            "\nIOC rule {index}: {}\n",
-                                            serde_json::to_string(rule)?
+                                            "UAC {}: {}\nUAC {} source: {} (line {})\n",
+                                            hash.algorithm,
+                                            hash.digest,
+                                            hash.algorithm,
+                                            hash.manifest.display(),
+                                            hash.line,
                                         ));
                                     }
+                                    for warning in hashes.warnings {
+                                        text.push_str(&format!("UAC hash warning: {warning}\n"));
+                                    }
                                 }
-                                text.push_str("\nOriginal record (display escaped; export preserves bytes):\n");
-                                text.push_str(&String::from_utf8_lossy(&detail.raw));
-                                tx.send(Message::Detail(text))?;
-                                Ok(())
-                            })()
-                        }
+                                Ok(None) => {}
+                                Err(error) => {
+                                    text.push_str(&format!("UAC hash warning: {error:#}\n"))
+                                }
+                            }
+                            cancel.check()?;
+                            let rules = store.rules()?;
+                            for index in &detail.matches {
+                                if let Some(rule) = rules.rules.get(*index) {
+                                    text.push_str(&format!(
+                                        "\nIOC rule {index}: {}\n",
+                                        serde_json::to_string(rule)?
+                                    ));
+                                }
+                            }
+                            text.push_str(
+                                "\nOriginal record (display escaped; export preserves bytes):\n",
+                            );
+                            text.push_str(&String::from_utf8_lossy(&detail.raw));
+                            tx.send(Message::Detail(text))?;
+                            Ok(())
+                        })(),
                         Command::Diagnostics => store
                             .diagnostics(200)
                             .and_then(|text| Ok(tx.send(Message::Detail(text))?)),

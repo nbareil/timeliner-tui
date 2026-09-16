@@ -367,6 +367,21 @@ Hostname discovery checks collected hostname command output, `uac.log`, and
 collected `etc/hostname` files. The collection directory or bodyfile filename is
 the fallback.
 
+For UAC sources, **Enter/F3** also shows MD5 and SHA-1 values found in
+`hash_executables/hash*.md5` and `hash_executables/hash*.sha1`. Each value includes
+the manifest pathname and line number. Matching uses the exact pathname within
+that source's package, so identical paths on different hosts stay separate.
+The original bodyfile's first field is shown unchanged.
+
+GNU checksum output and BSD/OpenSSL formats are supported, including spaces and
+GNU-escaped pathnames. Identical values are deduplicated; conflicting values
+remain visible. Missing optional manifests do not prevent inspection.
+The first lookup builds a disk index; later lookups reuse it and refresh changed
+manifests. Matching source lines are verified before their cached hashes are shown.
+This also works when resuming an existing investigation or opening
+`bodyfile/bodyfile.txt` directly.
+See the [UAC Details terminal capture](docs/images/uac-details.txt).
+
 ```sh
 # Repeat --host for explicit input-specific labels
 nix run path:. -- --host /cases/server-a web-01 /cases/server-a
@@ -465,13 +480,14 @@ Source modules separate bodyfile parsing, IOC rules, source access, SQLite
 storage, indexed queries, export, background workers, and the terminal UI.
 `src/theme.rs` defines the palettes; `src/ui/render.rs` handles presentation.
 `src/ui/mouse.rs` handles pointer input and the controls registered during rendering.
+`src/uac.rs` indexes and looks up collected executable hashes for the Details view.
 `src/burst.rs` detects dense seconds and builds display pages containing events
 or fold summaries; raw queries and exports continue to use `src/query.rs`.
 `src/navigation.rs` calculates timezone-aware boundaries and finds time or tag
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
-timeline data; append `details`, `filters`, `tags`, `views`, or `goto` to preview dialogs,
-or `selection` to preview multiple selected files.
+timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, or `goto`
+to preview dialogs, or `selection` to preview multiple selected files.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It

@@ -85,6 +85,15 @@ impl Store {
                source INTEGER NOT NULL REFERENCES sources(id), offset INTEGER NOT NULL,
                line INTEGER NOT NULL, length INTEGER NOT NULL, message TEXT NOT NULL);
              CREATE INDEX IF NOT EXISTS errors_source ON errors(source);
+             CREATE TABLE IF NOT EXISTS uac_hash_files(
+               source INTEGER NOT NULL, file TEXT NOT NULL,
+               size INTEGER NOT NULL, modified TEXT NOT NULL, PRIMARY KEY(source,file));
+             CREATE TABLE IF NOT EXISTS uac_hashes(
+               source INTEGER NOT NULL, file TEXT NOT NULL, path TEXT NOT NULL,
+               algorithm TEXT NOT NULL, digest TEXT NOT NULL, line INTEGER NOT NULL,
+               offset INTEGER NOT NULL, length INTEGER NOT NULL, sha256 BLOB NOT NULL,
+               PRIMARY KEY(source,file,line));
+             CREATE INDEX IF NOT EXISTS uac_hashes_path ON uac_hashes(source,path,file);
              CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT NOT NULL);"
         )?;
         let version: String =

@@ -8,5 +8,6 @@ pub mod query;
 pub mod source;
 pub mod store;
 pub mod theme;
+pub mod uac;
 pub mod ui;
 pub mod worker;
