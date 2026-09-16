@@ -3,7 +3,7 @@ use ratatui::{Terminal, backend::TestBackend};
 use std::{fs, time::Duration};
 use timeliner_tui::{
     ioc::Rules,
-    model::{Bookmark, DisplayRow, EventKey, Predicate, Row, Tag, View},
+    model::{Bookmark, DisplayRow, EventKey, Predicate, Row, Tag, TagChange, View},
     query::{self, Cancellation, Page},
     source,
     store::Store,
@@ -61,9 +61,32 @@ fn screen(app: &mut App, width: u16) -> String {
         .backend()
         .buffer()
         .content
+        .chunks(width as usize)
+        .map(|line| {
+            line.iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn tag_change(app: &App, record: i64, after: Tag) -> TagChange {
+    let rows: Vec<_> = app
+        .rows
         .iter()
-        .map(|cell| cell.symbol())
-        .collect()
+        .filter_map(DisplayRow::event)
+        .filter(|row| row.key.record == record)
+        .collect();
+    TagChange {
+        host: rows[0].host.clone(),
+        path: rows[0].path.clone(),
+        before: rows[0].tag,
+        after,
+        events: rows.iter().map(|row| (row.key, row.macb)).collect(),
+    }
 }
 
 #[test]
@@ -82,8 +105,101 @@ fn tab_applies_one_tag_to_selected_records_and_all_their_timestamps() {
         assert!(!row.automatic);
     }
     assert_eq!(app.rows[1].event().unwrap().tag, Tag::None);
-    // Repeated TAB presses use the updated assessment.
+    // Until the worker confirms success, TAB still uses the pending selection.
     assert_batch(key(&mut app, KeyCode::Tab), &[0, 2], Some(Tag::Malicious));
+}
+
+#[test]
+fn successful_tagging_clears_all_selected_timestamp_markers_and_preserves_bookmarks() {
+    let mut app = app();
+    app.rows[1].event_mut().unwrap().key.record = 0;
+    app.rows[1].event_mut().unwrap().path = "/tmp/file-0".into();
+    app.session.bookmarks.push(Bookmark {
+        name: 'a',
+        key: app.rows[0].key(),
+    });
+    select(&mut app, &[0, 2]);
+    let before = screen(&mut app, 144);
+    assert_eq!(before.matches('✓').count(), 3);
+    assert!(before.contains("2 files selected"));
+    let changes = [0, 2]
+        .map(|record| tag_change(&app, record, Tag::Suspicious))
+        .to_vec();
+    assert_batch(key(&mut app, KeyCode::Tab), &[0, 2], Some(Tag::Suspicious));
+    assert!(screen(&mut app, 144).contains('✓'));
+    let actions = app.message(Message::TaggedMany(changes));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!("Expected a refresh after tagging");
+    };
+    // Clear markers as soon as the tag is saved, even before the refresh finishes.
+    assert!(!screen(&mut app, 144).contains('✓'));
+    app.message(Message::Page(request.generation, app.rows.clone()));
+    let after = screen(&mut app, 144);
+    assert!(!after.contains('✓'));
+    assert!(!after.contains("files selected"));
+    assert!(after.lines().nth(5).unwrap().starts_with('●'));
+    assert!(after.lines().nth(7).unwrap().starts_with('▌'));
+    if std::env::var_os("TIMELINER_CAPTURE_SELECTION_ACTION").is_some() {
+        println!("Before tagging:\n{before}\n\nAfter tagging:\n{after}");
+    }
+    assert!(matches!(
+        key(&mut app, KeyCode::Tab).as_slice(),
+        [Action::Command(Command::Tag(2, Some(Tag::Ioc)))]
+    ));
+}
+
+#[test]
+fn successful_f2_actions_clear_single_and_multiple_file_selections() {
+    for selected in [&[0][..], &[0, 2][..]] {
+        for (code, tag) in [
+            ('1', Some(Tag::Suspicious)),
+            ('2', Some(Tag::Ioc)),
+            ('3', Some(Tag::Malicious)),
+            ('0', Some(Tag::None)),
+            ('a', None),
+        ] {
+            let mut app = app();
+            select(&mut app, selected);
+            let mut changes: Vec<_> = selected
+                .iter()
+                .map(|&record| tag_change(&app, record as i64, tag.unwrap_or(Tag::Ioc)))
+                .collect();
+            key(&mut app, KeyCode::F(2));
+            let actions = key(&mut app, KeyCode::Char(code));
+            assert_eq!(actions.len(), 1);
+            app.message(if selected.len() == 1 {
+                Message::Tagged(changes.remove(0))
+            } else {
+                Message::TaggedMany(changes)
+            });
+            assert!(!screen(&mut app, 144).contains('✓'), "F2 {code}");
+            assert!(
+                !screen(&mut app, 144).contains("files selected"),
+                "F2 {code}"
+            );
+        }
+    }
+}
+
+#[test]
+fn failed_tagging_keeps_the_selection_and_success_does_not_clear_newly_selected_files() {
+    let mut app = app();
+    select(&mut app, &[0, 2]);
+    let changes = [0, 2]
+        .map(|record| tag_change(&app, record, Tag::Ioc))
+        .to_vec();
+    assert_batch(key(&mut app, KeyCode::Tab), &[0, 2], Some(Tag::Suspicious));
+    app.message(Message::Error("Could not save tag".into()));
+    assert_eq!(screen(&mut app, 144).matches('✓').count(), 2);
+    assert!(screen(&mut app, 144).contains("2 files selected"));
+    assert_batch(key(&mut app, KeyCode::Tab), &[0, 2], Some(Tag::Ioc));
+    select(&mut app, &[3]);
+    app.message(Message::TaggedMany(changes));
+    assert_eq!(screen(&mut app, 144).matches('✓').count(), 1);
+    assert!(matches!(
+        key(&mut app, KeyCode::Tab).as_slice(),
+        [Action::Command(Command::Tag(3, Some(Tag::Suspicious)))]
+    ));
 }
 
 #[test]
@@ -116,15 +232,6 @@ fn space_toggles_by_source_record_and_ignores_repeats_releases_and_modifiers() {
 
 #[test]
 fn all_f2_assessments_apply_to_the_selection_even_after_paging_away() {
-    let mut app = app();
-    select(&mut app, &[0, 2]);
-    let later = app.rows[50..].to_vec();
-    let actions = key(&mut app, KeyCode::Char('G'));
-    let [Action::Page(request)] = actions.as_slice() else {
-        panic!("Expected page")
-    };
-    app.message(Message::Page(request.generation, later));
-    assert!(app.rows.iter().all(|row| row.key().record >= 50));
     for (code, tag) in [
         ('1', Some(Tag::Suspicious)),
         ('2', Some(Tag::Ioc)),
@@ -132,8 +239,50 @@ fn all_f2_assessments_apply_to_the_selection_even_after_paging_away() {
         ('0', Some(Tag::None)),
         ('a', None),
     ] {
+        let mut app = app();
+        select(&mut app, &[0, 2]);
+        let changes = [0, 2]
+            .map(|record| tag_change(&app, record, tag.unwrap_or(Tag::Ioc)))
+            .to_vec();
+        let later = app.rows[50..].to_vec();
+        let actions = key(&mut app, KeyCode::Char('G'));
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Expected page")
+        };
+        app.message(Message::Page(request.generation, later));
+        assert!(app.rows.iter().all(|row| row.key().record >= 50));
         key(&mut app, KeyCode::F(2));
         assert_batch(key(&mut app, KeyCode::Char(code)), &[0, 2], tag);
+        app.message(Message::TaggedMany(changes));
+        assert!(!screen(&mut app, 144).contains("files selected"));
+        assert!(matches!(
+            key(&mut app, KeyCode::Tab).as_slice(),
+            [Action::Command(Command::Tag(record, Some(Tag::Suspicious)))] if *record >= 50
+        ));
+    }
+}
+
+#[test]
+fn failed_exclusions_keep_selection_markers_and_escape_clears_them() {
+    for cancel in [false, true] {
+        let mut app = app();
+        select(&mut app, &[0, 2]);
+        let actions = key(&mut app, KeyCode::Char('x'));
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Expected exclusion");
+        };
+        if cancel {
+            key(&mut app, KeyCode::Esc);
+            // Escape explicitly clears the selection even when cancelling work.
+            assert!(!screen(&mut app, 144).contains('✓'));
+        } else {
+            app.message(Message::QueryError(
+                request.generation,
+                "Could not filter".into(),
+            ));
+            assert_eq!(screen(&mut app, 144).matches('✓').count(), 2);
+            assert_batch(key(&mut app, KeyCode::Tab), &[0, 2], Some(Tag::Suspicious));
+        }
     }
 }
 
@@ -153,6 +302,7 @@ fn exclusion_escapes_and_deduplicates_paths_and_undo_removes_the_whole_batch() {
     let [Action::Page(request)] = actions.as_slice() else {
         panic!("Expected exclusion")
     };
+    assert_eq!(screen(&mut app, 144).matches('✓').count(), 3);
     assert_eq!(request.view.predicate.exclude.len(), 2);
     let pattern = regex::Regex::new(&request.view.predicate.exclude[1]).unwrap();
     for path in ["/tmp/a[1].log", r"C:\temp\b+file"] {
@@ -174,6 +324,8 @@ fn exclusion_escapes_and_deduplicates_paths_and_undo_removes_the_whole_batch() {
         .collect();
     app.message(Message::Page(request.generation, filtered));
     // Successful exclusions clear the selection.
+    assert!(!screen(&mut app, 144).contains('✓'));
+    assert!(!screen(&mut app, 144).contains("files selected"));
     assert!(matches!(
         key(&mut app, KeyCode::Tab).as_slice(),
         [Action::Command(Command::Tag(1, Some(Tag::Suspicious)))]
@@ -397,7 +549,11 @@ fn worker_commits_the_selection_and_refreshes_the_timeline_once() {
         request.generation,
         refreshed.into_iter().map(DisplayRow::Event).collect(),
     ));
-    assert_batch(key(&mut app, KeyCode::Tab), &[1, 2], Some(Tag::Ioc));
+    assert!(!screen(&mut app, 144).contains('✓'));
+    assert!(matches!(
+        key(&mut app, KeyCode::Tab).as_slice(),
+        [Action::Command(Command::Tag(2, Some(Tag::Ioc)))]
+    ));
     assert!(workers.messages.try_recv().is_err());
     workers.shutdown();
 }

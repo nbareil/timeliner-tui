@@ -65,7 +65,8 @@ From a collapsed burst, forward jumps start after its end; backward jumps before
 zt/zz/zb put the selected event at the top/middle/bottom.
 z Enter / z. / z- do the same. Selection stays on the same event.
 SPACE toggles a file in the selection; ✓ marks all its timestamp entries.
-Selections survive scrolling and tagging. Esc clears them; changing tabs or filters resets them.
+Selections survive scrolling. Successful tagging or exclusion clears their markers.
+Esc clears selections; changing tabs or filters resets them.
 Reloading IOC rules clears the selection.
 TAB cycles the focused selected file's assessment and applies it to the selection.
 If focus is outside the selection, TAB uses the first selected source record.
@@ -349,9 +350,7 @@ impl App {
             .and_then(|pending| pending.candidate.clone());
         for change in changes {
             for (key, _) in &change.events {
-                if let Some(row) = self.selected_records.get_mut(&key.record) {
-                    row.tag = change.after;
-                }
+                self.selected_records.remove(&key.record);
             }
             for view in self
                 .session

@@ -188,12 +188,14 @@ file. Tags belong to the **whole original bodyfile record**, so its other
 timestamp events carry the same assessment in every tab.
 
 Press **x** to exclude all selected pathnames together; **u** undoes that batch.
-Selections remain after tagging, including when a tag filter hides a selected
-file. Escape in the timeline, switching tabs, and applying different filters or
-a timeframe clear the selection, as does reloading IOC rules. Selections are not
-saved between runs. `X` continues to edit the focused entry's parent directory.
+Successful tagging or exclusion clears the selection markers. Failed actions
+keep the selection so you can retry. Escape in the timeline, switching tabs, and
+applying different filters or a timeframe clear the selection, as does reloading
+IOC rules. Selections are not saved between runs. `X` continues to edit the focused
+entry's parent directory.
 Expand a burst summary before selecting its files.
-See the [terminal capture](docs/images/multi-selection.txt).
+See the [selection capture](docs/images/multi-selection.txt) and
+[markers cleared after tagging](docs/images/selection-action.txt).
 
 TAB switches fields when a dialog has focus.
 Forms support Ctrl+U to clear a field. In the filter editor, F2 focuses a new

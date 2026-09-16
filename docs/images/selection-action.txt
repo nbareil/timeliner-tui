@@ -1,0 +1,51 @@
+Before tagging:
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                            F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+   TIMESTAMP           HOST                       MACB PATH                                                                           ASSESSMENT
+●✓ 2020-09-13 12:26:40 host                       macb /tmp/file-0
+ ✓ 2020-09-13 12:26:41 host                       macb /tmp/file-0
+▌✓ 2020-09-13 12:26:42 host                       macb /tmp/file-2
+   2020-09-13 12:26:43 host                       macb /tmp/file-3
+   2020-09-13 12:26:44 host                       macb /tmp/file-4
+   2020-09-13 12:26:45 host                       macb /tmp/file-5
+   2020-09-13 12:26:46 host                       macb /tmp/file-6
+   2020-09-13 12:26:47 host                       macb /tmp/file-7
+   2020-09-13 12:26:48 host                       macb /tmp/file-8
+   2020-09-13 12:26:49 host                       macb /tmp/file-9
+   2020-09-13 12:26:50 host                       macb /tmp/file-10
+   2020-09-13 12:26:51 host                       macb /tmp/file-11
+   2020-09-13 12:26:52 host                       macb /tmp/file-12
+   2020-09-13 12:26:53 host                       macb /tmp/file-13
+   2020-09-13 12:26:54 host                       macb /tmp/file-14
+   2020-09-13 12:26:55 host                       macb /tmp/file-15
+  ● 2 files selected · SPACE toggles selection · TAB/F2 tag · x excludes · Esc clears
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     q  Quit
+
+After tagging:
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                            F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+   TIMESTAMP           HOST                       MACB PATH                                                                           ASSESSMENT
+●  2020-09-13 12:26:40 host                       macb /tmp/file-0                                                                    SUSPICIOUS
+   2020-09-13 12:26:41 host                       macb /tmp/file-0                                                                    SUSPICIOUS
+▌  2020-09-13 12:26:42 host                       macb /tmp/file-2                                                                    SUSPICIOUS
+   2020-09-13 12:26:43 host                       macb /tmp/file-3
+   2020-09-13 12:26:44 host                       macb /tmp/file-4
+   2020-09-13 12:26:45 host                       macb /tmp/file-5
+   2020-09-13 12:26:46 host                       macb /tmp/file-6
+   2020-09-13 12:26:47 host                       macb /tmp/file-7
+   2020-09-13 12:26:48 host                       macb /tmp/file-8
+   2020-09-13 12:26:49 host                       macb /tmp/file-9
+   2020-09-13 12:26:50 host                       macb /tmp/file-10
+   2020-09-13 12:26:51 host                       macb /tmp/file-11
+   2020-09-13 12:26:52 host                       macb /tmp/file-12
+   2020-09-13 12:26:53 host                       macb /tmp/file-13
+   2020-09-13 12:26:54 host                       macb /tmp/file-14
+   2020-09-13 12:26:55 host                       macb /tmp/file-15
+  ● Ready
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     q  Quit
