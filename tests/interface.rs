@@ -32,7 +32,7 @@ fn app() -> App {
     app
 }
 #[test]
-fn arrows_keep_the_same_event_selected_and_jk_never_scroll() {
+fn arrows_keep_the_same_event_selected_and_jk_scroll_only_at_edges() {
     let mut app = app();
     for _ in 0..5 {
         key(&mut app, KeyCode::Char('j'));
@@ -52,12 +52,14 @@ fn arrows_keep_the_same_event_selected_and_jk_never_scroll() {
         key(&mut app, KeyCode::Char('j'));
     }
     assert_eq!(app.session.views[0].selected, 9);
-    assert_eq!(app.top, 1);
+    assert_eq!(app.top, 16);
+    assert_eq!(app.rows[app.top + 9].key().record, 25);
     for _ in 0..20 {
         key(&mut app, KeyCode::Char('k'));
     }
     assert_eq!(app.session.views[0].selected, 0);
-    assert_eq!(app.top, 1);
+    assert_eq!(app.top, 5);
+    assert_eq!(app.rows[app.top].key().record, 5);
 }
 #[test]
 fn tab_tags_record_and_enter_requests_details() {

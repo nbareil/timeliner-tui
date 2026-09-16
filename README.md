@@ -75,7 +75,7 @@ byte offset, original record, and matching rules.
 | Key | Action |
 | --- | --- |
 | ↑ / ↓ | Scroll one row, keeping the same event selected while it is visible |
-| j / k | Move the highlight within the visible screen |
+| j / k | Select the next / previous event; scroll one row at screen edges |
 | Page Up / Page Down | Scroll a screen |
 | gg / G | Jump to the first / last matching event |
 | nm / nh / nd / nM / ny | Jump to the next minute / hour / day / month / year, centered |
@@ -108,6 +108,11 @@ byte offset, original record, and matching rules.
 
 Arrow keys keep the same event highlighted as the timeline scrolls. If that
 event leaves the screen, selection moves to the nearest visible event.
+
+`j` and `k` move the highlight between events. At the bottom or top of the screen,
+they scroll one row and select the adjacent event, loading another page when needed.
+They stop at the first or last matching event. Collapsed bursts stay folded and
+count as one displayed row. See the [terminal capture](docs/images/edge-scrolling.txt).
 
 The `z` shortcuts scroll around the selected event without changing its identity.
 They load more rows when needed and stop at the beginning of the timeline if

@@ -1,0 +1,41 @@
+After j at the bottom
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                  F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+  2020-09-13 12:27:21 host-a             macb /tmp/file-41
+  2020-09-13 12:27:22 host-a             macb /tmp/file-42
+  2020-09-13 12:27:23 host-a             macb /tmp/file-43
+  2020-09-13 12:27:24 host-a             macb /tmp/file-44
+  2020-09-13 12:27:25 host-a             macb /tmp/file-45
+  2020-09-13 12:27:26 host-a             macb /tmp/file-46
+  2020-09-13 12:27:27 host-a             macb /tmp/file-47
+  2020-09-13 12:27:28 host-a             macb /tmp/file-48
+  2020-09-13 12:27:29 host-a             macb /tmp/file-49
+▌ 2020-09-13 12:27:30 host-a             macb /tmp/file-50
+  ● Ready
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help            F2  Tags            F3  Detail          F4  Time            F5  Filter
+ F6  Fork            F7  Views           F8  Marks           F9  Export          q  Quit
+
+After k at the top
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                  F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+▌ 2020-09-13 12:27:19 host-a             macb /tmp/file-39
+  2020-09-13 12:27:20 host-a             macb /tmp/file-40
+  2020-09-13 12:27:21 host-a             macb /tmp/file-41
+  2020-09-13 12:27:22 host-a             macb /tmp/file-42
+  2020-09-13 12:27:23 host-a             macb /tmp/file-43
+  2020-09-13 12:27:24 host-a             macb /tmp/file-44
+  2020-09-13 12:27:25 host-a             macb /tmp/file-45
+  2020-09-13 12:27:26 host-a             macb /tmp/file-46
+  2020-09-13 12:27:27 host-a             macb /tmp/file-47
+  2020-09-13 12:27:28 host-a             macb /tmp/file-48
+  ● Ready
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help            F2  Tags            F3  Detail          F4  Time            F5  Filter
+ F6  Fork            F7  Views           F8  Marks           F9  Export          q  Quit

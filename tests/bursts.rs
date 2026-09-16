@@ -481,7 +481,7 @@ fn collapsing_still_allows_paging_back_to_the_first_event() {
     seconds.extend([(400, 180, 0), (401, 240, 0), (402, 5, 0)]);
     let fixture = Fixture::new(&seconds);
     let raw = fixture.raw(&View::default());
-    for code in [KeyCode::Up, KeyCode::PageUp] {
+    for code in [KeyCode::Up, KeyCode::PageUp, KeyCode::Char('k')] {
         let mut app = loaded(&fixture, raw[600].key);
         fold(&fixture, &mut app);
         for _ in 0..450 {
@@ -491,11 +491,20 @@ fn collapsing_still_allows_paging_back_to_the_first_event() {
                 assert!(page.reverse);
                 assert!(apply_query(&fixture, &mut app, page).is_empty());
             }
-            if app.rows[app.top].key() == raw[0].key {
+            let slot = if code == KeyCode::Char('k') {
+                app.session.views[0].selected
+            } else {
+                0
+            };
+            if app.rows[app.top + slot].key() == raw[0].key {
                 break;
             }
         }
         assert_eq!(app.rows[app.top].key(), raw[0].key);
+        if code == KeyCode::Char('k') {
+            assert_eq!(app.session.views[0].selected, 0);
+            assert_eq!(app.session.views[0].bursts.len(), 1);
+        }
     }
 }
 

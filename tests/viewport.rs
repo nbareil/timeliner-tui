@@ -584,7 +584,7 @@ fn time_jump_centers_the_actual_target_and_keeps_preceding_events_and_return_loc
         let slot = (height - 1) / 2;
         assert_selection(&app, 2064, slot);
         key(&mut app, KeyCode::Char('k'));
-        assert_selection(&app, 2064 - i64::from(slot > 0), slot.saturating_sub(1));
+        assert_selection(&app, 2063, slot.saturating_sub(1));
         key(&mut app, KeyCode::Char('\''));
         let previous = page(key(&mut app, KeyCode::Char('\'')));
         assert_eq!(previous.anchor, Some(event(40)));
@@ -891,4 +891,161 @@ fn backward_prefix_leaves_bookmarks_forms_and_viewport_shortcuts_available() {
     assert!(key(&mut app, KeyCode::Char('h')).is_empty());
     app.message(Message::Page(filter.generation, rows(1..129)));
     assert_eq!(app.session.views[0].predicate.include, "bt");
+}
+
+#[test]
+fn jk_scroll_one_cached_row_at_the_screen_edge_including_single_row_screens() {
+    for height in [1, 10, 19] {
+        for reverse in [false, true] {
+            let mut app = loaded(0..128, height);
+            app.top = 40;
+            let slot = if reverse { 0 } else { height - 1 };
+            app.session.views[0].selected = slot;
+            assert!(key(&mut app, KeyCode::Char(if reverse { 'k' } else { 'j' })).is_empty());
+            assert_eq!(app.top, if reverse { 39 } else { 41 });
+            assert_selection(&app, (app.top + slot) as i64, slot);
+        }
+    }
+}
+
+#[test]
+fn jk_fetch_adjacent_events_at_cache_edges_with_short_pages_and_cache_trimming() {
+    for reverse in [false, true] {
+        for full_page in [false, true] {
+            for height in [1, 10] {
+                let mut app = loaded(1000..1128, height);
+                let code = KeyCode::Char(if reverse { 'k' } else { 'j' });
+                let slot = if reverse { 0 } else { height - 1 };
+                app.top = if reverse { 0 } else { 128 - height };
+                app.session.views[0].selected = slot;
+                let request = page(key(&mut app, code));
+                assert_eq!(request.reverse, reverse);
+                assert!(!request.inclusive);
+                assert_eq!(
+                    request.anchor,
+                    Some(event(if reverse { 1000 } else { 1127 }))
+                );
+                assert!(
+                    key(&mut app, code).is_empty(),
+                    "Do not duplicate an in-flight page query"
+                );
+                let incoming = match (reverse, full_page) {
+                    (true, true) => 872..1000,
+                    (true, false) => 999..1000,
+                    (false, true) => 1128..1256,
+                    (false, false) => 1128..1129,
+                };
+                app.message(Message::Page(request.generation, rows(incoming)));
+                assert_selection(&app, if reverse { 999 } else { 1128 }, slot);
+                if full_page {
+                    app.top = if reverse { 0 } else { app.rows.len() - height };
+                    app.session.views[0].selected = slot;
+                    let request = page(key(&mut app, code));
+                    app.message(Message::Page(
+                        request.generation,
+                        rows(if reverse { 744..872 } else { 1256..1384 }),
+                    ));
+                    assert_selection(&app, if reverse { 871 } else { 1256 }, slot);
+                    assert_eq!(app.rows.len(), request.limit * 2);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn j_fills_blank_space_below_a_centered_selection_when_the_final_page_is_short() {
+    let mut app = loaded(1000..1128, 10);
+    app.top = 121;
+    app.session.views[0].selected = 6;
+    let request = page(key(&mut app, KeyCode::Char('j')));
+    app.message(Message::Page(request.generation, rows(1128..1129)));
+    assert_selection(&app, 1128, 7);
+    assert_eq!(app.top, 121);
+    assert!(key(&mut app, KeyCode::Char('j')).is_empty());
+    assert_selection(&app, 1128, 7);
+}
+
+#[test]
+fn jk_stop_at_timeline_ends_and_leave_empty_views_alone() {
+    for count in [0, 1, 3] {
+        let mut app = loaded(0..count, 10);
+        for _ in 0..10 {
+            assert!(key(&mut app, KeyCode::Char('j')).is_empty());
+        }
+        assert_eq!(app.top, 0);
+        assert_eq!(
+            app.session.views[0].selected,
+            (count as usize).saturating_sub(1)
+        );
+        for _ in 0..10 {
+            assert!(key(&mut app, KeyCode::Char('k')).is_empty());
+        }
+        assert_eq!(app.top, 0);
+        assert_eq!(app.session.views[0].selected, 0);
+    }
+}
+
+#[test]
+fn jk_page_loads_respect_selection_changes_and_cancellation_while_waiting() {
+    for reverse in [false, true] {
+        for cancel in [false, true] {
+            let mut app = loaded(1000..1128, 10);
+            app.top = if reverse { 0 } else { 118 };
+            app.session.views[0].selected = if reverse { 0 } else { 9 };
+            app.session.views[0].top = Some(app.rows[app.top].key());
+            let request = page(key(
+                &mut app,
+                KeyCode::Char(if reverse { 'k' } else { 'j' }),
+            ));
+            if cancel {
+                key(&mut app, KeyCode::Esc);
+            } else {
+                key(&mut app, KeyCode::Char(if reverse { 'j' } else { 'k' }));
+            }
+            app.message(Message::Page(
+                request.generation,
+                rows(if reverse { 872..1000 } else { 1128..1256 }),
+            ));
+            assert_selection(
+                &app,
+                if reverse { 1000 } else { 1127 },
+                if reverse { 0 } else { 9 },
+            );
+        }
+    }
+}
+
+#[test]
+fn jk_render_the_adjacent_event_at_the_same_screen_edge() {
+    let mut app = loaded(0..128, 10);
+    let mut terminal = Terminal::new(TestBackend::new(100, 19)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let mut capture = String::new();
+    for (code, slot, target, heading) in [
+        ('j', 9, 50, "After j at the bottom"),
+        ('k', 0, 39, "After k at the top"),
+    ] {
+        app.top = 40;
+        app.session.views[0].selected = slot;
+        key(&mut app, KeyCode::Char(code));
+        assert_selection(&app, target, slot);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let lines: Vec<_> = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+            })
+            .collect();
+        assert!(lines[5 + slot].contains('▌'));
+        assert!(lines[5 + slot].contains(&format!("/tmp/file-{target}")));
+        capture.push_str(&format!("{heading}\n{}\n\n", lines.join("\n")));
+    }
+    if std::env::var_os("TIMELINER_CAPTURE_EDGE_SCROLL").is_some() {
+        print!("{capture}");
+    }
 }

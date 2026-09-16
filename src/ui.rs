@@ -44,7 +44,7 @@ TIMELINER TUI
 
 ↑/↓ scroll the view, keeping the same event selected while visible.
 If it leaves the screen, the nearest visible event becomes selected.
-j/k move the highlight within the visible screen.
+j/k select the next/previous event, scrolling one row at screen edges.
 Mouse: wheel scrolls; click/drag selects; double-click/right-click inspects.
 Click tabs, function buttons, menu choices, and form fields.
 Mouse wheel scrolls details/help/bookmarks or moves between form fields.
@@ -107,6 +107,9 @@ enum Load {
     DetectBurst,
     FindJump(Jump),
     CenterJump(EventKey),
+    Step {
+        reverse: bool,
+    },
     Replace,
     Filter(Option<EventKey>),
     FilterLast(Option<EventKey>),
@@ -331,6 +334,7 @@ impl App {
                 Load::Before { .. }
                     | Load::Last
                     | Load::FilterLast(_)
+                    | Load::Step { reverse: true }
                     | Load::Reposition { reverse: true, .. }
             ),
             inclusive,
@@ -401,6 +405,35 @@ impl App {
                 self.rows.first().map(|r| r.key()),
                 false,
             ));
+        }
+        self.remember();
+        None
+    }
+    fn move_selection(&mut self, reverse: bool) -> Option<Action> {
+        let anchor = self.selected()?.key();
+        let selected = self.view().selected;
+        let index = self.top + selected;
+        if (reverse && index == 0) || (!reverse && index + 1 == self.rows.len()) {
+            let at_end = if reverse {
+                self.end_before
+            } else {
+                self.end_after
+            };
+            if !at_end && self.pending.is_none() {
+                return Some(self.load(Load::Step { reverse }, None, Some(anchor), false));
+            }
+            return None;
+        }
+        if reverse {
+            if selected == 0 {
+                self.top -= 1;
+            } else {
+                self.view_mut().selected -= 1;
+            }
+        } else if selected >= self.height.saturating_sub(1) {
+            self.top += 1;
+        } else {
+            self.view_mut().selected += 1;
         }
         self.remember();
         None
@@ -665,14 +698,24 @@ impl App {
                                 .min(self.rows.len().saturating_sub(1));
                         }
                     }
-                    Load::After { .. } | Load::Reposition { reverse: false, .. } => {
+                    Load::After { .. }
+                    | Load::Reposition { reverse: false, .. }
+                    | Load::Step { reverse: false } => {
                         self.end_after = rows.len() < limit;
+                        let added = rows.len();
                         self.rows.append(&mut rows);
                         if let Load::After { delta, keep_event } = mode {
                             self.scroll_to(
                                 (self.top + delta).min(self.rows.len().saturating_sub(self.height)),
                                 keep_event,
                             );
+                        }
+                        if matches!(mode, Load::Step { .. }) && added > 0 {
+                            if self.view().selected >= self.height.saturating_sub(1) {
+                                self.top += 1;
+                            } else {
+                                self.view_mut().selected += 1;
+                            }
                         }
                         if self.rows.len() > limit * 2 {
                             let discard = self.rows.len() - limit * 2;
@@ -681,7 +724,9 @@ impl App {
                             self.end_before = false;
                         }
                     }
-                    Load::Before { .. } | Load::Reposition { reverse: true, .. } => {
+                    Load::Before { .. }
+                    | Load::Reposition { reverse: true, .. }
+                    | Load::Step { reverse: true } => {
                         self.end_before = rows.len() < limit;
                         let added = rows.len();
                         rows.append(&mut self.rows);
@@ -689,6 +734,13 @@ impl App {
                         self.top += added;
                         if let Load::Before { delta, keep_event } = mode {
                             self.scroll_to(self.top.saturating_sub(delta), keep_event);
+                        }
+                        if matches!(mode, Load::Step { .. }) && added > 0 {
+                            if self.view().selected == 0 {
+                                self.top -= 1;
+                            } else {
+                                self.view_mut().selected -= 1;
+                            }
                         }
                         if self.rows.len() > limit * 2 {
                             self.rows.truncate(limit * 2);
@@ -1357,15 +1409,11 @@ impl App {
                     .into_iter()
                     .collect();
             }
-            KeyCode::Char('j') => {
-                self.view_mut().selected = (self.view().selected + 1)
-                    .min(self.height.saturating_sub(1))
-                    .min(self.rows.len().saturating_sub(self.top + 1));
-                self.remember();
-            }
-            KeyCode::Char('k') => {
-                self.view_mut().selected = self.view().selected.saturating_sub(1);
-                self.remember();
+            KeyCode::Char('j' | 'k') => {
+                return self
+                    .move_selection(key.code == KeyCode::Char('k'))
+                    .into_iter()
+                    .collect();
             }
             KeyCode::Tab => {
                 if let Some((record, tag)) =
