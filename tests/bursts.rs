@@ -1064,6 +1064,19 @@ fn worker_time_jumps_find_the_first_filtered_event_across_a_gap_and_center_it() 
             assert_eq!(app.rows[app.top + 4].key(), expected.key);
             assert_eq!(app.rows[app.top + 4].event().unwrap().macb & 1, 1);
             assert_eq!(app.session.views[0].predicate, view.predicate);
+            key(&mut app, KeyCode::Char('b'));
+            let find = request(key(&mut app, KeyCode::Char('m')));
+            let centered = request(worker_query(&workers, &mut app, find));
+            let previous = matching
+                .iter()
+                .rev()
+                .find(|row| row.key.epoch == BASE + 10)
+                .unwrap();
+            assert_eq!(centered.anchor, Some(previous.key));
+            assert!(worker_query(&workers, &mut app, centered).is_empty());
+            assert_eq!(app.session.views[0].selected, 4);
+            assert_eq!(app.rows[app.top + 4].key(), previous.key);
+            assert_eq!(app.session.views[0].predicate, view.predicate);
             key(&mut app, KeyCode::Char('k'));
             assert!(app.rows[app.top + 3].key() < expected.key);
         }
@@ -1100,6 +1113,13 @@ fn tagged_jumps_advance_within_a_second_and_intersect_current_filters() {
     }
     assert_eq!(find(14, &view), None);
     assert!(view.predicate.tags.is_none());
+    for (origin, previous) in [(2, 0), (4, 2), (6, 4), (14, 6)] {
+        let target = Jump::TaggedBefore(host_a[origin].key)
+            .find(&fixture.store, &view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.key, host_a[previous].key);
+    }
 
     for tags in [
         None,
@@ -1223,5 +1243,83 @@ fn worker_tagged_jump_centers_a_same_second_target_with_untagged_context() {
     for slot in [3, 5] {
         assert_eq!(app.rows[app.top + slot].event().unwrap().tag, Tag::None);
     }
+    key(&mut app, KeyCode::Char('b'));
+    let find = request(key(&mut app, KeyCode::Char('t')));
+    let centered = request(worker_query(&workers, &mut app, find));
+    assert_eq!(centered.anchor, Some(raw[0].key));
+    worker_query(&workers, &mut app, centered);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        raw[0].key
+    );
+    assert_eq!(app.session.views[0].selected, 0);
+    key(&mut app, KeyCode::Char('b'));
+    let find = request(key(&mut app, KeyCode::Char('t')));
+    assert!(worker_query(&workers, &mut app, find).is_empty());
+    assert!(app.status.contains("No earlier tagged event"));
     workers.shutdown();
+}
+
+#[test]
+fn backward_jumps_from_a_burst_skip_its_members_and_reveal_only_the_destination() {
+    let fixture = Fixture::new(&[(0, 20, 0), (60, 20, 0), (120, 20, 0)]);
+    let raw = fixture.raw(&View::default());
+    for row in [&raw[35], &raw[45]] {
+        fixture
+            .store
+            .set_tag(row.key.record, Some(Tag::Ioc))
+            .unwrap();
+    }
+    let bursts: Vec<_> = [0, 60, 120]
+        .into_iter()
+        .map(|second| {
+            let origin = raw
+                .iter()
+                .find(|row| row.key.epoch == BASE + second)
+                .unwrap();
+            fixture.detect(&View::default(), origin, 5).unwrap()
+        })
+        .collect();
+    // An inclusive reverse time seek picks the final event at a tied boundary.
+    assert_eq!(
+        Jump::PreviousTimeBoundary(BASE + 60)
+            .find(
+                &fixture.store,
+                &View::default(),
+                &Cancellation::never(),
+                |_| {}
+            )
+            .unwrap()
+            .unwrap()
+            .key,
+        raw[39].key,
+    );
+    for (suffix, target) in [('m', &raw[39]), ('t', &raw[35])] {
+        let mut app = loaded(&fixture, bursts[2].first);
+        app.session.views[0].bursts = bursts.clone();
+        key(&mut app, KeyCode::Char('g'));
+        let initial = request(key(&mut app, KeyCode::Char('g')));
+        apply_query(&fixture, &mut app, initial);
+        app.session.views[0].selected = 2;
+        key(&mut app, KeyCode::Char('b'));
+        let find = request(key(&mut app, KeyCode::Char(suffix)));
+        assert_eq!(
+            find.jump,
+            Some(if suffix == 't' {
+                Jump::TaggedBefore(bursts[2].first)
+            } else {
+                Jump::PreviousTimeBoundary(BASE + 80)
+            })
+        );
+        let centered = request(apply_query(&fixture, &mut app, find));
+        assert_eq!(centered.anchor, Some(target.key));
+        apply_query(&fixture, &mut app, centered);
+        assert_eq!(
+            app.session.views[0].bursts,
+            vec![bursts[0].clone(), bursts[2].clone()]
+        );
+        assert_eq!(app.session.views[0].selected, 4);
+        assert_eq!(app.rows[app.top + 4].key(), target.key);
+        assert!(app.rows[app.top + 4].event().is_some());
+    }
 }

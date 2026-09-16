@@ -1,0 +1,19 @@
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                  F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST               MACB PATH                                        ASSESSMENT
+  2020-09-13 12:44:20 host-a             macb /tmp/file-1060
+  2020-09-13 12:44:21 host-a             macb /tmp/file-1061
+  2020-09-13 12:44:22 host-a             macb /tmp/file-1062
+  2020-09-13 12:44:23 host-a             macb /tmp/file-1063
+▌ 2020-09-13 12:44:24 host-a             macb /tmp/file-1064
+  2020-09-13 12:44:25 host-a             macb /tmp/file-1065
+  2020-09-13 12:44:26 host-a             macb /tmp/file-1066
+  2020-09-13 12:44:27 host-a             macb /tmp/file-1067
+  2020-09-13 12:44:28 host-a             macb /tmp/file-1068
+  2020-09-13 12:44:29 host-a             macb /tmp/file-1069
+  ● Ready
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help            F2  Tags            F3  Detail          F4  Time            F5  Filter
+ F6  Fork            F7  Views           F8  Marks           F9  Export          q  Quit

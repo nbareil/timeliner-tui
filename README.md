@@ -80,6 +80,8 @@ byte offset, original record, and matching rules.
 | gg / G | Jump to the first / last matching event |
 | nm / nh / nd / nM / ny | Jump to the next minute / hour / day / month / year, centered |
 | nt | Jump to the next tagged event, centered |
+| bm / bh / bd / bM / by | Jump to the preceding minute / hour / day / month / year boundary, centered |
+| bt | Jump to the previous tagged event, centered |
 | zt / zz / zb | Put the selected event at the top / middle / bottom |
 | z ENTER / z. / z- | Aliases for zt / zz / zb |
 | TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged |
@@ -133,6 +135,16 @@ later events with the same timestamp. It respects the current filters, including
 any selected tag categories, and centers the destination among the view's
 surrounding events. From a burst summary, it searches after the burst's end. If there is
 no later matching tagged event, the view stays where it is.
+
+Use `b` instead of `n` to jump backward. `bm`, `bh`, `bd`, `bM`, and `by` find
+the last matching event at or before the preceding clock or calendar boundary.
+For example, `bh` from 10:25 targets 10:00; from exactly 10:00 it targets 09:00.
+`bd` from midday targets that day's midnight, while `bM` targets the start of
+that month. `bt` finds the previous tagged event, including within the same second.
+Backward jumps center the destination and preserve filters. From a collapsed
+burst, they search before its first timestamp; a burst containing the destination
+opens to reveal it. If no earlier event matches, the view stays where it is.
+See the [backward-jump terminal capture](docs/images/backward-jump.txt).
 
 Press `q` to save and quit from the timeline, help, or record details. Ctrl+C
 also quits from dialogs. In text fields, `q` is ordinary input; in bookmark

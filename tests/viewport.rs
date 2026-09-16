@@ -748,3 +748,147 @@ fn time_jump_renders_the_destination_at_the_screen_center() {
         println!("{}", lines.join("\n"));
     }
 }
+
+fn back_jump(app: &mut App, suffix: char) -> PageRequest {
+    assert!(key(app, KeyCode::Char('b')).is_empty());
+    page(key(app, KeyCode::Char(suffix)))
+}
+
+#[test]
+fn backward_shortcuts_use_the_selection_and_display_timezone() {
+    for (suffix, expected) in [
+        ('m', "2020-09-13T12:27:00Z"),
+        ('h', "2020-09-13T12:15:00Z"),
+        ('d', "2020-09-12T18:15:00Z"),
+        ('M', "2020-08-31T18:15:00Z"),
+        ('y', "2019-12-31T18:15:00Z"),
+    ] {
+        let mut app = loaded(0..128, 10);
+        app.top = 40;
+        app.session.views[0].selected = 3;
+        app.session.timezone = "Asia/Kathmandu".into();
+        key(&mut app, KeyCode::Char('b'));
+        let find = page(app.key(KeyEvent::new(
+            KeyCode::Char(suffix),
+            if suffix == 'M' {
+                KeyModifiers::SHIFT
+            } else {
+                KeyModifiers::NONE
+            },
+        )));
+        assert_eq!(
+            find.jump,
+            Some(Jump::PreviousTimeBoundary(
+                chrono::DateTime::parse_from_rfc3339(expected)
+                    .unwrap()
+                    .timestamp()
+            ))
+        );
+    }
+    let mut app = loaded(0..128, 10);
+    app.top = 40;
+    app.session.views[0].selected = 3;
+    assert_eq!(
+        back_jump(&mut app, 't').jump,
+        Some(Jump::TaggedBefore(event(43)))
+    );
+}
+
+#[test]
+fn backward_jump_centers_the_destination_and_saves_the_return_location() {
+    let mut app = loaded(2000..2128, 10);
+    let mut terminal = Terminal::new(TestBackend::new(100, 19)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    app.top = 40;
+    app.session.views[0].selected = 3;
+    let find = back_jump(&mut app, 'h');
+    let centered = time_target(&mut app, &find, 1064);
+    assert!(
+        !centered.reverse,
+        "Context is displayed in chronological order"
+    );
+    app.message(Message::Page(centered.generation, rows(1000..1128)));
+    assert_selection(&app, 1064, 4);
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
+    let lines: Vec<_> = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect();
+    assert!(lines[9].contains("▌"));
+    assert!(lines[9].contains("/tmp/file-1064"));
+    if std::env::var_os("TIMELINER_CAPTURE_BACK_JUMP").is_some() {
+        println!("{}", lines.join("\n"));
+    }
+    key(&mut app, KeyCode::Char('\''));
+    assert_eq!(
+        page(key(&mut app, KeyCode::Char('\''))).anchor,
+        Some(event(2040))
+    );
+}
+
+#[test]
+fn backward_jumps_preserve_the_view_on_cancellation_and_when_no_target_matches() {
+    for suffix in ['h', 't'] {
+        for cancel in [false, true] {
+            let mut app = loaded(2000..2128, 10);
+            app.top = 40;
+            app.session.views[0].selected = 3;
+            let find = back_jump(&mut app, suffix);
+            if cancel {
+                let centered = time_target(&mut app, &find, 1064);
+                key(&mut app, KeyCode::Esc);
+                app.message(Message::Page(centered.generation, rows(1000..1128)));
+            } else {
+                app.message(Message::JumpTarget(find.generation, None));
+                assert!(app.status.contains(if suffix == 't' {
+                    "No earlier tagged"
+                } else {
+                    "No matching event"
+                }));
+            }
+            assert_eq!(app.top, 40);
+            assert_eq!(app.session.views[0].selected, 3);
+            assert_eq!(app.rows[43].key(), event(2043));
+        }
+    }
+}
+
+#[test]
+fn backward_prefix_leaves_bookmarks_forms_and_viewport_shortcuts_available() {
+    let mut app = loaded(0..128, 10);
+    for suffix in [KeyCode::Char('x'), KeyCode::Char('q'), KeyCode::Tab] {
+        key(&mut app, KeyCode::Char('b'));
+        assert!(key(&mut app, suffix).is_empty());
+        assert!(app.status.contains("Unknown b shortcut"));
+    }
+    key(&mut app, KeyCode::Char('b'));
+    key(&mut app, KeyCode::Esc);
+    key(&mut app, KeyCode::Char('m'));
+    key(&mut app, KeyCode::Char('b'));
+    assert_eq!(app.session.bookmarks[0].name, 'b');
+    key(&mut app, KeyCode::Char('\''));
+    assert!(key(&mut app, KeyCode::Char('b')).is_empty());
+    assert!(matches!(
+        key(&mut app, KeyCode::Enter).as_slice(),
+        [Action::Command(Command::Detail(..))]
+    ));
+    app.top = 40;
+    app.session.views[0].selected = 3;
+    reposition(&mut app, KeyCode::Char('b'));
+    assert_selection(&app, 43, 9);
+    key(&mut app, KeyCode::F(5));
+    key(&mut app, KeyCode::Char('b'));
+    key(&mut app, KeyCode::Char('t'));
+    let filter = page(key(&mut app, KeyCode::Enter));
+    assert_eq!(filter.view.predicate.include, "bt");
+    key(&mut app, KeyCode::Char('b'));
+    assert!(key(&mut app, KeyCode::Char('h')).is_empty());
+    app.message(Message::Page(filter.generation, rows(1..129)));
+    assert_eq!(app.session.views[0].predicate.include, "bt");
+}

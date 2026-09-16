@@ -52,8 +52,10 @@ Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
 nm/nh/nd/nM/ny jump to the next minute/hour/day/month/year and center it.
 nt jumps to the next tagged event and centers it, including within the same second.
+bm/bh/bd/bM/by jump backward to the preceding minute/hour/day/month/year boundary.
+bt jumps to the previous tagged event. Backward destinations are centered too.
 Jumps use the selected timezone and current filters; '' returns.
-From a collapsed burst, jumps start after its end.
+From a collapsed burst, forward jumps start after its end; backward jumps before its start.
 zt/zz/zb put the selected event at the top/middle/bottom.
 z Enter / z. / z- do the same. Selection stays on the same event.
 TAB cycles a record's assessment. ENTER/F3 opens full details.
@@ -440,7 +442,7 @@ impl App {
         self.remember();
         None
     }
-    fn jump_origin(&mut self) -> Option<EventKey> {
+    fn jump_origin(&mut self, reverse: bool) -> Option<EventKey> {
         if self.pending.is_some() {
             self.status = "Loading… (Escape cancels)".into();
             return None;
@@ -451,24 +453,43 @@ impl App {
         };
         Some(match row {
             DisplayRow::Event(row) => row.key,
-            DisplayRow::Burst(burst) => burst.last,
+            DisplayRow::Burst(burst) => {
+                if reverse {
+                    burst.first
+                } else {
+                    burst.last
+                }
+            }
         })
     }
-    fn next_time(&mut self, unit: TimeUnit) -> Option<Action> {
-        let epoch = self.jump_origin()?.epoch;
+    fn jump_time(&mut self, unit: TimeUnit, reverse: bool) -> Option<Action> {
+        let epoch = self.jump_origin(reverse)?.epoch;
         let tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
-        let boundary = match unit.next_boundary(epoch, tz) {
+        let boundary = if reverse {
+            unit.previous_boundary(epoch, tz)
+        } else {
+            unit.next_boundary(epoch, tz)
+        };
+        let boundary = match boundary {
             Ok(boundary) => boundary,
             Err(error) => {
                 self.status = error.to_string();
                 return None;
             }
         };
-        Some(self.find_jump(Jump::TimeBoundary(boundary)))
+        Some(self.find_jump(if reverse {
+            Jump::PreviousTimeBoundary(boundary)
+        } else {
+            Jump::TimeBoundary(boundary)
+        }))
     }
-    fn next_tagged(&mut self) -> Option<Action> {
-        let origin = self.jump_origin()?;
-        Some(self.find_jump(Jump::TaggedAfter(origin)))
+    fn jump_tagged(&mut self, reverse: bool) -> Option<Action> {
+        let origin = self.jump_origin(reverse)?;
+        Some(self.find_jump(if reverse {
+            Jump::TaggedBefore(origin)
+        } else {
+            Jump::TaggedAfter(origin)
+        }))
     }
     fn find_jump(&mut self, jump: Jump) -> Action {
         let Action::Page(mut request) = self.load(Load::FindJump(jump), None, None, true) else {
@@ -714,6 +735,10 @@ impl App {
                             "No matching event at or after the next time boundary"
                         }
                         Jump::TaggedAfter(_) => "No later tagged event matches this view",
+                        Jump::PreviousTimeBoundary(_) => {
+                            "No matching event at or before the previous time boundary"
+                        }
+                        Jump::TaggedBefore(_) => "No earlier tagged event matches this view",
                     }
                     .into();
                     return vec![];
@@ -1202,10 +1227,10 @@ impl App {
         }
         if let Some(prefix) = self.prefix.take() {
             match (prefix, key.code) {
-                ('n', code) => {
+                ('n' | 'b', code) => {
                     if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
                         if code == KeyCode::Char('t') {
-                            return self.next_tagged().into_iter().collect();
+                            return self.jump_tagged(prefix == 'b').into_iter().collect();
                         }
                         let unit = match code {
                             KeyCode::Char('m') => Some(TimeUnit::Minute),
@@ -1216,10 +1241,12 @@ impl App {
                             _ => None,
                         };
                         if let Some(unit) = unit {
-                            return self.next_time(unit).into_iter().collect();
+                            return self.jump_time(unit, prefix == 'b').into_iter().collect();
                         }
                     }
-                    self.status = "Unknown n shortcut: use nm, nh, nd, nM, ny, or nt".into();
+                    self.status = format!(
+                        "Unknown {prefix} shortcut: use {prefix}m, {prefix}h, {prefix}d, {prefix}M, {prefix}y, or {prefix}t"
+                    );
                     return vec![];
                 }
                 ('z', code) => {
@@ -1283,10 +1310,11 @@ impl App {
             }
         }
         match key.code {
-            KeyCode::Char('n') if key.modifiers.is_empty() => {
-                self.prefix = Some('n');
-                self.status =
-                    "n… minute: m · hour: h · day: d · month: M · year: y · tagged: t (Esc cancels)".into();
+            KeyCode::Char(prefix @ ('n' | 'b')) if key.modifiers.is_empty() => {
+                self.prefix = Some(prefix);
+                self.status = format!(
+                    "{prefix}… minute: m · hour: h · day: d · month: M · year: y · tagged: t (Esc cancels)"
+                );
             }
             KeyCode::Char('c') if key.modifiers.is_empty() => return self.collapse_burst(),
             KeyCode::Char('C') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
