@@ -113,6 +113,9 @@ fn main() {
         Some("filters") => {
             app.key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE));
         }
+        Some("directory") => {
+            app.key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT));
+        }
         Some("tags") => {
             app.key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE));
         }

@@ -1,0 +1,36 @@
+  ◆ TIMELINER        Tab 1/4  1–9 select · gt/gT switch                                                                              F11  Light
+   ● 1 All activity   2 IOC review   3 Authentication   4 Tagged
+  TIME  2026-09-08 08:10:00  →  2026-09-09 09:10:00   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                            ASSESSMENT
+  2026-09-08 09:10:00 web-01                     m··· /etc/ssh/sshd_config
+  2026-09-08 09:10:37 db-01                      ·a·· /var/log/auth.log
+  2026-09-08 09:11:14 edge-02                    m·c· /usr/sbin/sshd
+● 2026-09-08 09:11:51 app-04                     ··cb /home/deploy/.ssh/authorized_keys                                               SUSPICIOUS
+  2026-09-08 09:12:28 web-01                     macb /var/log/nginx/access.log
+  2026-09-08 09:13:05 db-01                      m··· /etc/systemd/system/backup.service                                                     IOC
+  2026-09-08 09:13:42 edge-02                    ·a·· /var/spool/cron/crontabs/root
+● 2026-09-08 09:14:19 app-04                     m·c· /tmp/.cache/systemd-netd                                                         MALICIOUS
+  2026-09-08 09:14:56 web╭  Exclude directory  ───────────────────────────────────────────────────────────────────────╮
+  2026-09-08 09:15:33 db-│  Backspace parent directory · Enter exclude                                                │
+  2026-09-08 09:16:10 edg│                                                                                            │
+  2026-09-08 09:16:47 app│  Directory (including subdirectories)                                                      │
+  2026-09-08 09:17:24 web│  ▎ /tmp/.cache                                                                             │
+  2026-09-08 09:18:01 db-│                                                                                            │
+  2026-09-08 09:18:38 edg│                                                                                            │               SUSPICIOUS
+  2026-09-08 09:19:15 app│                                                                                            │                      IOC
+  2026-09-08 09:19:52 web│  Type to edit · Delete character · Ctrl+U clear · Esc cancel                               │
+  2026-09-08 09:20:29 db-╰───────────────────────────────────────────────────────────────────────────────── Esc close ╯
+  2026-09-08 09:21:06 edge-02                    ··cb /etc/resolv.conf
+  2026-09-08 09:21:43 app-04                     macb /usr/lib/systemd/system/ssh.service
+  2026-09-08 09:22:20 web-01                     m··· /var/www/html/index.html
+  2026-09-08 09:22:57 db-01                      ·a·· /opt/application/logs/worker.log
+  2026-09-08 09:23:34 edge-02                    m·c· /usr/bin/curl
+  2026-09-08 09:24:11 app-04                     ··cb /etc/ssl/certs/ca-certificates.crt
+  2026-09-08 09:24:48 web-01                     macb /home/deploy/.config/environment
+  2026-09-08 09:25:25 db-01                      m··· /var/log/syslog
+  2026-09-08 09:26:02 edge-02                    ·a·· /opt/application/releases/current
+  2026-09-08 09:26:39 app-04                     m·c· /etc/hosts
+  ● Ready · 4 collections indexed
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect   gt/gT tabs   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     F10  Quit

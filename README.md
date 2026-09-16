@@ -92,7 +92,8 @@ byte offset, original record, and matching rules.
 | F9 | Export |
 | F10 / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
-| x / X | Exclude the selected pathname / directory subtree |
+| x | Exclude the selected pathname |
+| X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
 | u | Remove the most recent exclusion |
 | D | Malformed-record diagnostics |
 | Escape | Close a dialog or cancel pending work |
@@ -149,6 +150,12 @@ Exclusions apply as pages are fetched from your current position, within the
 selected timeframe. Adding or removing one does not build a full filtered
 database. Use `x` or `X` to exclude a pathname or directory, `u` to undo the most
 recent exclusion, or F5 to edit individual patterns.
+
+`X` opens a directory editor prefilled from the selected entry. Each Backspace
+moves up one directory; it stops at `/`, a drive root, or a network share root.
+You can type to edit the path, use Delete to erase one character, or Ctrl+U to
+clear it. Enter excludes that directory and its descendants; Escape cancels.
+Directory paths are treated literally, so regex characters need no escaping.
 
 Filter changes keep the selected event in view. If it is excluded, the highlight
 moves to the next remaining event, or the preceding event at the end of the

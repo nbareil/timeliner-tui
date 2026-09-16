@@ -436,7 +436,8 @@ fn excluding_all_events_and_undoing_keeps_a_selection_below_the_top_row() {
     app.session.views[0].selected = 8;
     let focus = app.rows[28].key;
     let restored = app.rows[28..].to_vec();
-    let actions = key(&mut app, KeyCode::Char('X'));
+    key(&mut app, KeyCode::Char('X'));
+    let actions = key(&mut app, KeyCode::Enter);
     let [Action::Page(request)] = actions.as_slice() else {
         panic!()
     };
@@ -538,7 +539,8 @@ fn undoing_an_exclusion_after_no_matches_restores_the_previous_position() {
     let mut app = app();
     app.top = 20;
     let anchor = app.rows[20].key;
-    let actions = key(&mut app, KeyCode::Char('X'));
+    key(&mut app, KeyCode::Char('X'));
+    let actions = key(&mut app, KeyCode::Enter);
     let [Action::Page(forward)] = actions.as_slice() else {
         panic!()
     };
@@ -561,6 +563,152 @@ fn undoing_an_exclusion_after_no_matches_restores_the_previous_position() {
     };
     assert_eq!(undo.anchor, Some(anchor));
     assert!(undo.view.predicate.exclude.is_empty());
+}
+
+#[test]
+fn directory_exclusion_backspace_moves_by_components_and_stops_at_roots() {
+    for (path, backspaces, directory, descendant, sibling) in [
+        (
+            "/var/log/audit/events",
+            0,
+            "/var/log/audit",
+            "/var/log/audit/events",
+            "/var/log/auditing/events",
+        ),
+        (
+            "/var/log/audit/events",
+            1,
+            "/var/log",
+            "/var/log/other/file",
+            "/var/logger/file",
+        ),
+        (
+            "/var/log/audit/events",
+            8,
+            "/",
+            "/any/file",
+            "relative/file",
+        ),
+        (
+            r"C:\Users\Alice\AppData\file",
+            1,
+            r"C:\Users\Alice",
+            r"C:\Users\Alice\other\file",
+            r"C:\Users\Alicia\file",
+        ),
+        (
+            r"C:\Users\Alice\file",
+            8,
+            "C:\\",
+            r"C:\other\file",
+            r"D:\other\file",
+        ),
+        (
+            r"\\server\share\logs\app\file",
+            8,
+            r"\\server\share",
+            r"\\server\share\file",
+            r"\\server\share2\file",
+        ),
+        (
+            "/tmp/a[1].d/file",
+            0,
+            "/tmp/a[1].d",
+            "/tmp/a[1].d/child",
+            "/tmp/a1xd/child",
+        ),
+        ("logs/app/file", 1, "logs", "logs/child", "logs-old/child"),
+        ("logs/app/file", 8, ".", "other/file", "/absolute/file"),
+    ] {
+        let mut app = app();
+        app.top = 20;
+        app.session.views[0].selected = 4;
+        app.rows[24].path = path.into();
+        assert!(
+            app.key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT))
+                .is_empty()
+        );
+        for _ in 0..backspaces {
+            assert!(key(&mut app, KeyCode::Backspace).is_empty());
+        }
+        assert!(app.session.views[0].predicate.exclude.is_empty());
+        let mut terminal = Terminal::new(TestBackend::new(120, 24)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let text = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(text.contains(directory), "{path}: {text}");
+        let actions = key(&mut app, KeyCode::Enter);
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Expected directory exclusion for {path}")
+        };
+        assert_eq!(request.anchor, Some(app.rows[20].key));
+        let pattern = regex::Regex::new(&request.view.predicate.exclude[0]).unwrap();
+        assert!(pattern.is_match(directory), "{path}: {pattern}");
+        assert!(pattern.is_match(descendant), "{path}: {pattern}");
+        assert!(!pattern.is_match(sibling), "{path}: {pattern}");
+        if directory == "." {
+            assert!(!pattern.is_match(r"C:\absolute"));
+            assert!(!pattern.is_match(r"\\server\share\absolute"));
+        }
+    }
+}
+
+#[test]
+fn directory_exclusion_can_be_edited_cancelled_and_combined_with_pending_filters() {
+    let mut app = app();
+    key(&mut app, KeyCode::Char('x'));
+    key(&mut app, KeyCode::Char('X'));
+    app.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+    key(&mut app, KeyCode::Backspace);
+    assert!(key(&mut app, KeyCode::Enter).is_empty());
+    for character in "/custom/audit[z].".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    key(&mut app, KeyCode::Delete);
+    let actions = key(&mut app, KeyCode::Enter);
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(request.view.predicate.exclude.len(), 2);
+    assert_eq!(request.view.predicate.exclude[0], "^/tmp/file\\-0$");
+    let pattern = regex::Regex::new(&request.view.predicate.exclude[1]).unwrap();
+    assert!(pattern.is_match("/custom/audit[z]/file"));
+    assert!(!pattern.is_match("/custom/auditz/file"));
+    let rows = app.rows.clone();
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        rows,
+    ));
+    let view = app.session.views[0].clone();
+    key(&mut app, KeyCode::Char('X'));
+    key(&mut app, KeyCode::Backspace);
+    key(&mut app, KeyCode::Esc);
+    assert_eq!(app.session.views[0].predicate, view.predicate);
+    assert_eq!(app.session.views[0].top, view.top);
+    assert_eq!(app.session.views[0].selected, view.selected);
+}
+
+#[test]
+fn directory_editor_shows_the_end_of_long_paths() {
+    let mut app = app();
+    app.rows[0].path = format!("/{}répertoire-final/file", "long-directory/".repeat(20));
+    key(&mut app, KeyCode::Char('X'));
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(text.contains("répertoire-final"), "{text}");
+    assert!(text.contains("Backspace parent directory"), "{text}");
 }
 
 #[test]

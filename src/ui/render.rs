@@ -417,11 +417,16 @@ impl App {
                 match form.kind {
                     FormKind::Time => "Timeframe",
                     FormKind::Filters => "Filter timeline",
+                    FormKind::Directory => "Exclude directory",
                     FormKind::Export => "Export records",
                     FormKind::Reload => "IOC rules",
                     FormKind::Rename => "Rename view",
                 },
-                "Tab next field · Ctrl+U clear · Enter apply",
+                if form.kind == FormKind::Directory {
+                    "Backspace parent directory · Enter exclude"
+                } else {
+                    "Tab next field · Ctrl+U clear · Enter apply"
+                },
                 94,
                 (form.fields.len() as u16)
                     .saturating_mul(3)
@@ -620,12 +625,19 @@ impl App {
                     } else {
                         display_text(value)
                     };
+                    let line = Line::from(vec![
+                        label(if active { "▎ " } else { "  " }, p.accent),
+                        label(shown, p.text),
+                    ]);
+                    let scroll = if form.kind == FormKind::Directory {
+                        line.width()
+                            .saturating_sub(content.width as usize)
+                            .min(u16::MAX as usize) as u16
+                    } else {
+                        0
+                    };
                     frame.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            label(if active { "▎ " } else { "  " }, p.accent),
-                            label(shown, p.text),
-                        ]))
-                        .style(style),
+                        Paragraph::new(line).scroll((0, scroll)).style(style),
                         Rect::new(content.x, y + 1, content.width, 1),
                     );
                 }
@@ -634,6 +646,8 @@ impl App {
                         form.error.clone()
                     } else if form.kind == FormKind::Filters {
                         "F2 add exclusion · Ctrl+D remove · Enter apply".into()
+                    } else if form.kind == FormKind::Directory {
+                        "Type to edit · Delete character · Ctrl+U clear · Esc cancel".into()
                     } else {
                         "Enter applies your changes".into()
                     };

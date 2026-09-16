@@ -55,7 +55,9 @@ If a mark is hidden, a new unfiltered view reveals it.
 F8 lists marks. da deletes mark a from the timeline or F8.
 No Vim text registers are implemented.
 
-x excludes the selected pathname; X excludes its directory subtree.
+x excludes the selected pathname; X edits a directory exclusion.
+In X: Backspace goes up one directory; Enter excludes its subtree.
+Type to edit; Delete erases a character; Ctrl+U clears the path.
 u removes the most recent exclusion.
 / opens the path filter editor. Exclusions are regular expressions.
 Filters use Rust regex syntax (no lookaround/backreferences).
@@ -95,6 +97,7 @@ struct Pending {
 enum FormKind {
     Time,
     Filters,
+    Directory,
     Export,
     Reload,
     Rename,
@@ -517,6 +520,15 @@ impl App {
                 fields.push(("Exclude path regex", String::new()));
                 fields
             }
+            FormKind::Directory => {
+                let Some(row) = self.selected() else {
+                    return;
+                };
+                vec![(
+                    "Directory (including subdirectories)",
+                    parent_directory(&row.path).into(),
+                )]
+            }
             FormKind::Export => vec![
                 ("Output bodyfile", "tagged.bodyfile".into()),
                 ("Scope (all/current)", "all".into()),
@@ -576,6 +588,20 @@ impl App {
                     .filter(|s| !s.is_empty())
                     .collect();
                 validate_view(&view)?;
+                Ok(vec![self.reload_filters(view)])
+            }
+            FormKind::Directory => {
+                let directory = &form.fields[0].1;
+                if directory.is_empty() {
+                    bail!("Enter a directory to exclude");
+                }
+                let pattern = directory_exclusion(directory);
+                let mut view = self.requested_view().clone();
+                if view.predicate.exclude.contains(&pattern) {
+                    self.status = "Directory is already excluded".into();
+                    return Ok(vec![]);
+                }
+                view.predicate.exclude.push(pattern);
                 Ok(vec![self.reload_filters(view)])
             }
             FormKind::Export => {
@@ -702,6 +728,15 @@ impl App {
                         }
                         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             form.fields[form.active].1.clear()
+                        }
+                        KeyCode::Backspace if form.kind == FormKind::Directory => {
+                            let directory = &mut form.fields[form.active].1;
+                            if !directory.is_empty() {
+                                *directory = parent_directory(directory).into();
+                            }
+                        }
+                        KeyCode::Delete if form.kind == FormKind::Directory => {
+                            form.fields[form.active].1.pop();
                         }
                         KeyCode::Backspace => {
                             form.fields[form.active].1.pop();
@@ -916,17 +951,10 @@ impl App {
                 }
                 self.status = "No exclusions to remove".into();
             }
-            KeyCode::Char('x' | 'X') => {
+            KeyCode::Char('X') => self.form(FormKind::Directory),
+            KeyCode::Char('x') => {
                 if let Some(path) = self.selected().map(|r| r.path.clone()) {
-                    let pattern = if key.code == KeyCode::Char('X') {
-                        let parent = path
-                            .rsplit_once(['/', '\\'])
-                            .map(|(p, _)| p)
-                            .unwrap_or(&path);
-                        format!("^{}(?:[/\\\\]|$)", regex::escape(parent))
-                    } else {
-                        format!("^{}$", regex::escape(&path))
-                    };
+                    let pattern = format!("^{}$", regex::escape(&path));
                     let mut view = self.requested_view().clone();
                     if !view.predicate.exclude.contains(&pattern) {
                         view.predicate.exclude.push(pattern);
@@ -937,6 +965,50 @@ impl App {
             _ => {}
         }
         vec![]
+    }
+}
+
+// Evidence paths can use a different platform's separators from this machine.
+fn directory_root_len(path: &str) -> usize {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\')
+    {
+        3
+    } else if path.starts_with("\\\\") || path.starts_with("//") {
+        let mut parts = path[2..].split_inclusive(['/', '\\']);
+        let server = parts.next().unwrap_or("");
+        let share = parts.next().unwrap_or("").trim_end_matches(['/', '\\']);
+        2 + server.len() + share.len()
+    } else {
+        usize::from(path.starts_with(['/', '\\']))
+    }
+}
+
+fn parent_directory(path: &str) -> &str {
+    let root = directory_root_len(path);
+    let path = &path[..path.trim_end_matches(['/', '\\']).len().max(root)];
+    if path.len() <= root && root != 0 {
+        return path;
+    }
+    match path.rfind(['/', '\\']) {
+        Some(index) => &path[..index.max(root)],
+        None => ".",
+    }
+}
+
+fn directory_exclusion(path: &str) -> String {
+    let root = directory_root_len(path);
+    let path = &path[..path.trim_end_matches(['/', '\\']).len().max(root)];
+    if path == "." {
+        // Match relative paths without hiding Unix, drive, or UNC absolute paths.
+        r"^(?:[^/\\A-Za-z]|[A-Za-z](?:[^:]|$)|[A-Za-z]:(?:[^/\\]|$))".into()
+    } else if path.ends_with(['/', '\\']) {
+        format!("^{}", regex::escape(path))
+    } else {
+        format!("^{}(?:[/\\\\]|$)", regex::escape(path))
     }
 }
 
