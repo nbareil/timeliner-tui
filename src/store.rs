@@ -74,7 +74,7 @@ impl Store {
                id INTEGER PRIMARY KEY, source INTEGER NOT NULL REFERENCES sources(id),
                offset INTEGER NOT NULL, length INTEGER NOT NULL, line INTEGER NOT NULL,
                sha256 BLOB NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, host TEXT NOT NULL,
-               matches TEXT NOT NULL, manual_tag INTEGER, tag INTEGER NOT NULL,
+               matches TEXT NOT NULL, manual_tag INTEGER, tag INTEGER NOT NULL, is_directory INTEGER,
                UNIQUE(source,offset));
              CREATE INDEX IF NOT EXISTS records_tag ON records(tag,id);
              CREATE TABLE IF NOT EXISTS events(
@@ -102,6 +102,14 @@ impl Store {
             })?;
         if version != "1" {
             bail!("Unsupported workspace schema {version}");
+        }
+        let has_directory_type: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('records') WHERE name='is_directory')",
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_directory_type {
+            conn.execute("ALTER TABLE records ADD COLUMN is_directory INTEGER", [])?;
         }
         Ok(Self {
             conn,
@@ -309,8 +317,8 @@ impl Store {
             let mut eof = false;
             {
                 let mut record_insert = transaction.prepare_cached(
-                    "INSERT INTO records(source,offset,length,line,sha256,path,hash,host,matches,tag)
-                     VALUES(?,?,?,?,?,?,?,?,?,?)")?;
+                    "INSERT INTO records(source,offset,length,line,sha256,path,hash,host,matches,tag,is_directory)
+                     VALUES(?,?,?,?,?,?,?,?,?,?,?)")?;
                 let mut event_insert =
                     transaction.prepare_cached("INSERT INTO events VALUES(?,?,?)")?;
                 let mut error_insert =
@@ -350,7 +358,8 @@ impl Store {
                                 record.fields[0],
                                 host,
                                 serde_json::to_string(&hits)?,
-                                tag as i64
+                                tag as i64,
+                                record.is_directory(),
                             ])?;
                             let record_id = transaction.last_insert_rowid();
                             for (epoch, mask) in record.events() {

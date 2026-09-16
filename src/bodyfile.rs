@@ -70,4 +70,12 @@ impl Record {
         }
         result
     }
+
+    pub fn is_directory(&self) -> bool {
+        let mode = self.fields[3].trim().trim_matches('"');
+        let symbolic = mode.rsplit('/').next().unwrap_or(mode);
+        symbolic.starts_with('d')
+            || u32::from_str_radix(mode.strip_prefix("0o").unwrap_or(mode), 8)
+                .is_ok_and(|bits| bits & 0o170000 == 0o040000)
+    }
 }

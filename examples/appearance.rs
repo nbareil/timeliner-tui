@@ -93,6 +93,7 @@ fn main() {
                 },
                 automatic: i == 5 || i == 15,
                 ioc_match: matches!(i, 5 | 7 | 15),
+                is_directory: false,
             })
         })
         .collect();
@@ -107,6 +108,23 @@ fn main() {
         },
     ];
     match args.get(1).map(String::as_str) {
+        Some("directories") => {
+            for (index, path) in [
+                (0, "/etc/ssh"),
+                (1, "/var/log/"),
+                (2, r"C:\Windows\System32"),
+                (3, r"\\server\share"),
+                (
+                    4,
+                    "/var/lib/application/a-very-long-directory-name/with-more-components/than-fit-in-the-path-column",
+                ),
+            ] {
+                let row = app.rows[index].event_mut().unwrap();
+                row.path = path.into();
+                row.is_directory = true;
+            }
+            app.session.views[0].selected = 2;
+        }
         Some("uac-details") => {
             app.message(Message::Detail(concat!(
                 "Host: app-04\nSource #4: /case/uac-app-04/bodyfile/bodyfile.txt\n",

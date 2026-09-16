@@ -2,7 +2,7 @@ use crate::{
     burst,
     export::{self, Export},
     ioc::Rules,
-    model::{Burst, DisplayRow, EventKey, Row, Session, Tag, TagChange, View},
+    model::{Burst, DisplayRow, EventKey, Row, Session, Tag, TagChange, View, display_path},
     navigation::Jump,
     query::{self, Cancellation},
     source::Input,
@@ -233,7 +233,9 @@ impl Workers {
                             for (index, (label, value)) in
                                 labels.iter().zip(&detail.record.fields).enumerate()
                             {
-                                let value = if index == 6 {
+                                let value = if index == 1 {
+                                    display_path(value, detail.record.is_directory()).into_owned()
+                                } else if index == 6 {
                                     format_file_size(value.parse::<u64>()?)
                                 } else if index >= 7 {
                                     let epoch = detail.record.times[index - 7];

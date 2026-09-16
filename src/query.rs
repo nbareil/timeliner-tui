@@ -7,6 +7,7 @@ use regex::Regex;
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -320,9 +321,10 @@ pub(crate) fn page_omitting(
         }
     }
     let mut details = store.conn.prepare_cached(
-        "SELECT host,path,tag,manual_tag IS NULL,matches!='[]' FROM records WHERE id=?",
+        "SELECT host,path,tag,manual_tag IS NULL,matches!='[]',is_directory FROM records WHERE id=?",
     )?;
     let mut result = Vec::with_capacity(limit);
+    let mut legacy_types = HashMap::new();
     let mut checked = 0_u64;
     loop {
         cancel.check()?;
@@ -361,16 +363,20 @@ pub(crate) fn page_omitting(
                 skipped_to = Some(if reverse { burst.first } else { burst.last });
                 break;
             }
-            let row = details.query_row([key.record], |r| {
-                Ok(Row {
-                    key,
-                    macb,
-                    host: r.get(0)?,
-                    path: r.get(1)?,
-                    tag: Tag::from_i64(r.get(2)?),
-                    automatic: r.get(3)?,
-                    ioc_match: r.get(4)?,
-                })
+            let (mut row, directory) = details.query_row([key.record], |r| {
+                Ok((
+                    Row {
+                        key,
+                        macb,
+                        host: r.get(0)?,
+                        path: r.get(1)?,
+                        tag: Tag::from_i64(r.get(2)?),
+                        automatic: r.get(3)?,
+                        ioc_match: r.get(4)?,
+                        is_directory: false,
+                    },
+                    r.get::<_, Option<bool>>(5)?,
+                ))
             })?;
             checked += 1;
             if checked.is_multiple_of(1024) {
@@ -381,6 +387,15 @@ pub(crate) fn page_omitting(
                     .iter()
                     .any(|burst| burst.host == row.host && burst.contains_key(key))
             {
+                row.is_directory = directory.unwrap_or_else(|| {
+                    *legacy_types.entry(key.record).or_insert_with(|| {
+                        // Older indexes lack mode metadata. Inspect only matching
+                        // rows, and keep browsing available if a source is offline.
+                        store
+                            .detail(key.record)
+                            .is_ok_and(|detail| detail.record.is_directory())
+                    })
+                });
                 result.push(row);
                 if result.len() == limit {
                     break;

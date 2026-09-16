@@ -33,6 +33,7 @@ fn app() -> App {
                 tag: Tag::None,
                 automatic: true,
                 ioc_match: false,
+                is_directory: false,
             })
         })
         .collect();

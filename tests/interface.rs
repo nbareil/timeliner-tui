@@ -26,6 +26,7 @@ fn app() -> App {
                 tag: Tag::None,
                 automatic: false,
                 ioc_match: false,
+                is_directory: false,
             })
         })
         .collect();
@@ -995,6 +996,7 @@ fn jumping_to_end_keeps_backward_pagination_available() {
                 tag: Tag::None,
                 automatic: true,
                 ioc_match: false,
+                is_directory: false,
             })
         })
         .collect();
@@ -1058,6 +1060,7 @@ fn errors_from_old_queries_do_not_discard_newer_results() {
         tag: Tag::None,
         automatic: true,
         ioc_match: false,
+        is_directory: false,
     });
     app.message(timeliner_tui::worker::Message::Page(
         new.generation,

@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[repr(i64)]
@@ -96,6 +97,18 @@ pub struct Row {
     pub tag: Tag,
     pub automatic: bool,
     pub ioc_match: bool,
+    pub is_directory: bool,
+}
+
+/// Add a visual directory marker while preserving the indexed evidence pathname.
+pub fn display_path(path: &str, is_directory: bool) -> Cow<'_, str> {
+    if !is_directory || path.ends_with(['/', '\\']) {
+        return Cow::Borrowed(path);
+    }
+    let bytes = path.as_bytes();
+    let windows = (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
+        || (path.contains('\\') && !path.contains('/'));
+    Cow::Owned(format!("{path}{}", if windows { '\\' } else { '/' }))
 }
 
 #[derive(Debug, Clone)]

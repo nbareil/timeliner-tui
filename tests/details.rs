@@ -162,3 +162,19 @@ fn uac_details_show_collected_hashes_with_source_lines_after_resuming() {
         workers.shutdown();
     }
 }
+
+#[test]
+fn directory_details_add_a_separator_without_changing_the_original_record() {
+    for (path, expected) in [
+        ("/etc", "/etc/"),
+        (r"C:\Windows", "C:\\Windows\\"),
+        ("/etc/", "/etc/"),
+    ] {
+        let original = format!("0|{path}|1|d/drwxr-xr-x|0|0|10|100|200|300|400\n");
+        let (_dir, workers) = start(&original);
+        let text = details(&workers, chrono_tz::UTC);
+        workers.shutdown();
+        assert!(text.contains(&format!("Path: {expected}\n")), "{text}");
+        assert!(text.ends_with(&original));
+    }
+}

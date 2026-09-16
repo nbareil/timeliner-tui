@@ -22,6 +22,7 @@ fn rows(start: i64, count: usize) -> Vec<DisplayRow> {
                 tag: Tag::None,
                 automatic: false,
                 ioc_match: false,
+                is_directory: false,
             })
         })
         .collect()

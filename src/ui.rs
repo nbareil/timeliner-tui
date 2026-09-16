@@ -3,7 +3,7 @@ use crate::{
     export::Export,
     model::{
         Bookmark, DisplayRow, EventKey, Predicate, Row, Session, Tag, TagChange, View, boundary,
-        display_text, macb, validate_view,
+        display_path, display_text, macb, validate_view,
     },
     navigation::{Jump, TimeUnit, parse_goto},
     worker::{BurstRequest, Command, Message, PageRequest, Workers},

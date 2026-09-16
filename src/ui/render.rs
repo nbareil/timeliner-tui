@@ -380,8 +380,13 @@ impl App {
                 })
                 .collect::<Vec<_>>();
             frame.render_widget(Paragraph::new(Line::from(flags)).style(base), cells[3]);
-            let path = display_text(&row.path);
-            let split = path.rfind(['/', '\\']).map_or(0, |i| i + 1);
+            let path = display_text(&display_path(&row.path, row.is_directory));
+            let basename_path = if row.is_directory {
+                path.trim_end_matches(['/', '\\'])
+            } else {
+                path.as_str()
+            };
+            let split = basename_path.rfind(['/', '\\']).map_or(0, |i| i + 1);
             let path_color = if row.ioc_match { p.amber } else { p.text };
             let path_style = if selected {
                 Style::default().fg(path_color).add_modifier(Modifier::BOLD)
@@ -399,6 +404,22 @@ impl App {
                 .style(base),
                 cells[4],
             );
+            if row.is_directory
+                && Line::from(path.as_str()).width() > cells[4].width as usize
+                && cells[4].width > 0
+            {
+                let marker = path.chars().next_back().unwrap_or('/');
+                let width = cells[4].width.min(2);
+                frame.render_widget(
+                    Paragraph::new(if width == 1 {
+                        marker.to_string()
+                    } else {
+                        format!("…{marker}")
+                    })
+                    .style(base.patch(path_style)),
+                    Rect::new(cells[4].right() - width, cells[4].y, width, 1),
+                );
+            }
             if row.tag != Tag::None {
                 let (fg, bg) = match row.tag {
                     Tag::Suspicious => (p.amber, p.amber_soft),

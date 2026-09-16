@@ -72,6 +72,14 @@ the right edge. Amber paths identify IOC rule matches; the tag column shows the
 current assessment. ENTER opens the full pathname, all 11 fields, source line and
 byte offset, original record, and matching rules.
 
+Directory paths end in `/`, or `\` for Windows-style paths, in the timeline and
+Details. The bodyfile's mode field identifies directories; a separator already
+present is not duplicated. Long directory rows retain an `…/` or `…\` marker when
+clipped. These markers affect display only: filters, exclusions, hash lookup, and
+exports use the original pathname. Existing investigations read mode information
+from the original record when it is missing from the index.
+See the [directory-row terminal capture](docs/images/directories.txt).
+
 | Key | Action |
 | --- | --- |
 | ↑ / ↓ | Scroll one row, keeping the same event selected while it is visible |
@@ -487,7 +495,7 @@ or fold summaries; raw queries and exports continue to use `src/query.rs`.
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, or `goto`
-to preview dialogs, or `selection` to preview multiple selected files.
+to preview dialogs, or `selection` and `directories` to preview timeline markers.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It
