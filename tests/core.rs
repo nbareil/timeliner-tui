@@ -725,6 +725,7 @@ fn session_round_trip_preserves_independent_tabs_marks_and_location() {
         }],
         timezone: "UTC".into(),
         theme: timeliner_tui::theme::Theme::Dark,
+        burst_threshold: 100,
     };
     store.save_session(&session).unwrap();
     let restored = store.session().unwrap();

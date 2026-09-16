@@ -1,0 +1,22 @@
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                                                              F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                                            ASSESSMENT
+  2020-09-13 12:27:20 host-a                     ·a·· /usr/lib/file-0
+  2020-09-13 12:27:20 host-a                     m··· /usr/share/file-1
+  2020-09-13 12:27:20 host-a                     ma·· /usr/lib/file-2
+  2020-09-13 12:27:20 host-a                     ·a·· /usr/share/file-3
+▌ 2020-09-13 12:27:21 host-a                     ma·· ▶ 580 events · through 2020-09-13 12:27:23 · Enter expand
+  2020-09-13 12:27:21 host-b                     ·a·· /usr/lib/file-0
+  2020-09-13 12:27:22 host-b                     ·a·· /usr/lib/file-0
+  2020-09-13 12:27:23 host-b                     ·a·· /usr/lib/file-0
+  2020-09-13 12:27:24 host-a                     ·a·· /usr/lib/file-0
+  2020-09-13 12:27:24 host-a                     m··· /usr/share/file-1
+  2020-09-13 12:27:24 host-a                     ma·· /usr/lib/file-2
+  2020-09-13 12:27:24 host-a                     ·a·· /usr/share/file-3
+  2020-09-13 12:27:24 host-a                     m··· /usr/lib/file-4
+
+  ● Ready
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help        F2  Tags        F3  Detail      F4  Time        F5  Filter      F6  Fork        F7  Views       F8  Marks       F9  Export      q  Quit

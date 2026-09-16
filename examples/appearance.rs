@@ -8,7 +8,7 @@ use ratatui::{
 };
 use serde_json::json;
 use timeliner_tui::{
-    model::{Bookmark, EventKey, Row, Tag, View},
+    model::{Bookmark, DisplayRow, EventKey, Row, Tag, View},
     theme::Theme,
     ui::App,
     worker::Message,
@@ -76,32 +76,34 @@ fn main() {
     app.rows = paths
         .into_iter()
         .enumerate()
-        .map(|(i, path)| Row {
-            key: EventKey {
-                epoch: begin + i as i64 * 37,
-                record: i as i64 + 1,
-            },
-            macb: [1, 2, 5, 12, 15][i % 5],
-            host: ["web-01", "db-01", "edge-02", "app-04"][i % 4].into(),
-            path: path.into(),
-            tag: match i {
-                3 | 14 => Tag::Suspicious,
-                5 | 15 => Tag::Ioc,
-                7 => Tag::Malicious,
-                _ => Tag::None,
-            },
-            automatic: i == 5 || i == 15,
-            ioc_match: matches!(i, 5 | 7 | 15),
+        .map(|(i, path)| {
+            DisplayRow::Event(Row {
+                key: EventKey {
+                    epoch: begin + i as i64 * 37,
+                    record: i as i64 + 1,
+                },
+                macb: [1, 2, 5, 12, 15][i % 5],
+                host: ["web-01", "db-01", "edge-02", "app-04"][i % 4].into(),
+                path: path.into(),
+                tag: match i {
+                    3 | 14 => Tag::Suspicious,
+                    5 | 15 => Tag::Ioc,
+                    7 => Tag::Malicious,
+                    _ => Tag::None,
+                },
+                automatic: i == 5 || i == 15,
+                ioc_match: matches!(i, 5 | 7 | 15),
+            })
         })
         .collect();
     app.session.bookmarks = vec![
         Bookmark {
             name: 'a',
-            key: app.rows[3].key,
+            key: app.rows[3].key(),
         },
         Bookmark {
             name: 'b',
-            key: app.rows[7].key,
+            key: app.rows[7].key(),
         },
     ];
     match args.get(1).map(String::as_str) {

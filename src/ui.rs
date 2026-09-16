@@ -1,10 +1,11 @@
 use crate::{
+    burst,
     export::Export,
     model::{
-        Bookmark, EventKey, Predicate, Row, Session, Tag, View, boundary, display_text, macb,
-        validate_view,
+        Bookmark, DisplayRow, EventKey, Predicate, Row, Session, Tag, View, boundary, display_text,
+        macb, validate_view,
     },
-    worker::{Command, Message, PageRequest, Workers},
+    worker::{BurstRequest, Command, Message, PageRequest, Workers},
 };
 use anyhow::{Result, bail};
 use chrono::TimeZone;
@@ -71,6 +72,12 @@ x excludes the selected pathname; X edits a directory exclusion.
 In X: Backspace goes up one directory; Enter excludes its subtree.
 Type to edit; Delete erases a character; Ctrl+U clears the path.
 u removes the most recent exclusion.
+c collapses consecutive dense seconds on the selected host, across all paths.
+Each second must exceed the threshold (default 100 events/s). No gaps are bridged.
+C edits the threshold. c or ENTER/F3 on a summary expands it.
+Other hosts remain visible. Tag edits keep unrelated folds closed.
+Filters, IOC rule reloads, and restart reset folds. Bookmark jumps reveal members.
+Export includes folded records.
 / opens the path filter editor. Exclusions are regular expressions.
 Filters use Rust regex syntax (no lookaround/backreferences).
 F2 → a restores automatic IOC assessment, including a cleared tag.
@@ -90,6 +97,7 @@ State is saved automatically. Sources are never modified.";
 
 #[derive(Clone, Copy)]
 enum Load {
+    DetectBurst,
     Replace,
     Filter(Option<EventKey>),
     FilterLast(Option<EventKey>),
@@ -134,6 +142,7 @@ struct Pending {
 }
 #[derive(Clone, Copy, PartialEq)]
 enum FormKind {
+    Burst,
     Time,
     Filters,
     Directory,
@@ -164,7 +173,7 @@ pub enum Action {
 
 pub struct App {
     pub session: Session,
-    pub rows: Vec<Row>,
+    pub rows: Vec<DisplayRow>,
     pub top: usize,
     pub height: usize,
     detail_scroll_max: usize,
@@ -218,17 +227,71 @@ impl App {
             .unwrap_or_else(|| self.view())
     }
     fn reload_filters(&mut self, mut view: View) -> Action {
-        let anchor = self.rows.get(self.top).map(|row| row.key).or(view.top);
-        let focus = self.selected().map(|row| row.key).or(view.top);
+        view.bursts.clear();
+        let anchor = self.rows.get(self.top).map(|row| row.key()).or(view.top);
+        let focus = self.selected().map(|row| row.key()).or(view.top);
         view.top = anchor;
         view.selected = self.view().selected;
         self.load(Load::Filter(focus), Some(view), anchor, true)
     }
-    fn selected(&self) -> Option<&Row> {
+    fn selected(&self) -> Option<&DisplayRow> {
         self.rows.get(self.top + self.view().selected)
     }
+    fn selected_event(&self) -> Option<&Row> {
+        self.selected().and_then(DisplayRow::event)
+    }
+    fn load_around(&mut self, focus: EventKey, mut view: View) -> Action {
+        let context_before = self
+            .view()
+            .selected
+            .max(self.height / 2)
+            .min(self.height.saturating_sub(1));
+        view.selected = context_before;
+        let Action::Page(mut request) =
+            self.load(Load::Filter(Some(focus)), Some(view), Some(focus), true)
+        else {
+            unreachable!()
+        };
+        request.context_before = context_before;
+        Action::Page(request)
+    }
+    fn expand_burst(&mut self) -> Option<Action> {
+        let DisplayRow::Burst(burst) = self.selected()? else {
+            return None;
+        };
+        let (first, origin) = (burst.first, burst.origin);
+        let mut view = self.view().clone();
+        view.bursts.retain(|burst| burst.first != first);
+        Some(self.load_around(origin, view))
+    }
+    fn collapse_burst(&mut self) -> Vec<Action> {
+        if self.pending.is_some() {
+            self.status = "Loading… (Escape cancels)".into();
+            return vec![];
+        }
+        if let Some(action) = self.expand_burst() {
+            return vec![action];
+        }
+        let Some(row) = self.selected_event() else {
+            self.status = "No event selected".into();
+            return vec![];
+        };
+        let detection = BurstRequest {
+            origin: row.key,
+            host: row.host.clone(),
+            threshold: self.session.burst_threshold,
+        };
+        let Action::Page(mut request) =
+            self.load(Load::DetectBurst, None, Some(detection.origin), true)
+        else {
+            unreachable!()
+        };
+        request.detect_burst = Some(detection);
+        self.status = "Finding burst… (Escape cancels)".into();
+        vec![Action::Page(request)]
+    }
     fn remember(&mut self) {
-        if let Some(key) = self.rows.get(self.top).map(|row| row.key) {
+        if let Some(key) = self.rows.get(self.top).map(|row| row.key()) {
             self.view_mut().top = Some(key);
         }
         self.dirty_session = true;
@@ -263,13 +326,15 @@ impl App {
             ),
             inclusive,
             limit,
+            context_before: 0,
+            detect_burst: None,
         })
     }
     fn refresh(&mut self) -> Action {
         self.load(
             Load::Replace,
             None,
-            self.rows.get(self.top).map(|r| r.key).or(self.view().top),
+            self.rows.get(self.top).map(|r| r.key()).or(self.view().top),
             true,
         )
     }
@@ -310,7 +375,7 @@ impl App {
                         keep_event,
                     },
                     None,
-                    self.rows.last().map(|r| r.key),
+                    self.rows.last().map(|r| r.key()),
                     false,
                 ));
             }
@@ -323,7 +388,7 @@ impl App {
                     keep_event,
                 },
                 None,
-                self.rows.first().map(|r| r.key),
+                self.rows.first().map(|r| r.key()),
                 false,
             ));
         }
@@ -335,7 +400,7 @@ impl App {
             self.status = "Loading… (Escape cancels)".into();
             return None;
         }
-        let Some(focus) = self.selected().map(|row| row.key) else {
+        let Some(focus) = self.selected().map(|row| row.key()) else {
             self.status = "No matching events. F4 timeframe · F5 filters".into();
             return None;
         };
@@ -350,7 +415,7 @@ impl App {
             } else {
                 self.rows.last()
             }
-            .map(|row| row.key);
+            .map(|row| row.key());
             return Some(self.load(
                 Load::Reposition {
                     focus,
@@ -391,7 +456,18 @@ impl App {
         self.remember();
         self.previous = Some((self.session.active, self.view().clone()));
         self.modal = None;
-        if let Some(index) = self.rows.iter().position(|r| r.key == mark.key) {
+        if self
+            .view()
+            .bursts
+            .iter()
+            .any(|burst| burst.contains_key(mark.key))
+        {
+            let mut view = self.view().clone();
+            view.bursts.retain(|burst| !burst.contains_key(mark.key));
+            view.selected = 0;
+            return vec![self.load(Load::Mark(mark.key, name), Some(view), Some(mark.key), true)];
+        }
+        if let Some(index) = self.rows.iter().position(|r| r.key() == mark.key) {
             self.top = index.saturating_sub(self.height / 2);
             self.view_mut().selected = index - self.top;
             self.remember();
@@ -430,8 +506,11 @@ impl App {
                     limit,
                     ..
                 } = pending;
+                if matches!(mode, Load::DetectBurst) {
+                    return vec![];
+                }
                 if let Load::Mark(key, name) = mode {
-                    if rows.first().is_none_or(|r| r.key != key) {
+                    if rows.first().is_none_or(|r| r.key() != key) {
                         return vec![self.open_view(View {
                             name: format!("Mark {name}"),
                             top: Some(key),
@@ -453,13 +532,14 @@ impl App {
                 }
                 if let Load::Filter(Some(focus)) = mode
                     && rows.len() == limit
-                    && rows.last().is_some_and(|row| row.key < focus)
+                    && rows.last().is_some_and(|row| row.key() < focus)
                 {
                     // Removing exclusions can insert more than a page before the
                     // selection. Seek directly to its key instead of losing it.
                     return vec![self.load(mode, candidate, Some(focus), true)];
                 }
                 match mode {
+                    Load::DetectBurst => unreachable!(),
                     Load::Replace
                     | Load::Filter(_)
                     | Load::FilterLast(_)
@@ -487,7 +567,7 @@ impl App {
                             } else {
                                 let index = self
                                     .rows
-                                    .partition_point(|row| row.key < focus)
+                                    .partition_point(|row| row.key() < focus)
                                     .min(self.rows.len() - 1);
                                 let slot = self.view().selected.min(self.height.saturating_sub(1));
                                 self.top = index.saturating_sub(slot);
@@ -534,7 +614,7 @@ impl App {
                 if let Load::Reposition {
                     focus, position, ..
                 } = mode
-                    && let Some(index) = self.rows.iter().position(|row| row.key == focus)
+                    && let Some(index) = self.rows.iter().position(|row| row.key() == focus)
                 {
                     self.top = index.saturating_sub(position.slot(self.height));
                     self.view_mut().selected = index - self.top;
@@ -552,7 +632,58 @@ impl App {
                 self.remember();
                 vec![]
             }
-            Message::Changed => vec![self.refresh()],
+            Message::Burst(generation, burst) => {
+                if !self.pending.as_ref().is_some_and(|pending| {
+                    pending.generation == generation && matches!(pending.mode, Load::DetectBurst)
+                }) {
+                    return vec![];
+                }
+                self.pending = None;
+                let Some(burst) = burst else {
+                    self.status = format!(
+                        "No burst here: each second must exceed {} events on this host (C changes threshold)",
+                        self.session.burst_threshold
+                    );
+                    return vec![];
+                };
+                let first = burst.first;
+                let mut view = self.view().clone();
+                view.bursts.retain(|existing| {
+                    existing.host != burst.host
+                        || existing.last < burst.first
+                        || existing.first > burst.last
+                });
+                view.bursts.push(burst);
+                vec![self.load_around(first, view)]
+            }
+            Message::Tagged(change) => {
+                for view in self
+                    .session
+                    .views
+                    .iter_mut()
+                    .chain(self.previous.iter_mut().map(|(_, view)| view))
+                {
+                    if burst::apply_tag_change(view, &change).is_err() {
+                        view.bursts.clear();
+                    }
+                }
+                let anchor = self
+                    .rows
+                    .get(self.top)
+                    .map(DisplayRow::key)
+                    .or(self.view().top);
+                let focus = self.selected().map(DisplayRow::key).or(self.view().top);
+                vec![self.load(Load::Filter(focus), None, anchor, true)]
+            }
+            Message::Changed => {
+                for view in &mut self.session.views {
+                    view.bursts.clear();
+                }
+                if let Some((_, view)) = &mut self.previous {
+                    view.bursts.clear();
+                }
+                vec![self.refresh()]
+            }
             Message::Progress(generation, text) => {
                 if generation == 0
                     || self
@@ -591,6 +722,10 @@ impl App {
     }
     fn form(&mut self, kind: FormKind) {
         let fields: Vec<(&str, String)> = match kind {
+            FormKind::Burst => vec![(
+                "More than this many events per second",
+                self.session.burst_threshold.to_string(),
+            )],
             FormKind::Time => {
                 let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
                 let format = |epoch: Option<i64>| {
@@ -635,7 +770,7 @@ impl App {
                 fields
             }
             FormKind::Directory => {
-                let Some(row) = self.selected() else {
+                let Some(row) = self.selected_event() else {
                     return;
                 };
                 vec![(
@@ -661,6 +796,18 @@ impl App {
     fn apply_form(&mut self, form: &Form) -> Result<Vec<Action>> {
         let value = |i: usize| form.fields[i].1.trim();
         match form.kind {
+            FormKind::Burst => {
+                let threshold: u64 = value(0).parse().map_err(|_| {
+                    anyhow::anyhow!("Enter a positive whole number of events per second")
+                })?;
+                if threshold == 0 {
+                    bail!("Enter a positive whole number of events per second");
+                }
+                self.session.burst_threshold = threshold;
+                self.dirty_session = true;
+                self.status = format!("Burst threshold: more than {threshold} events/second");
+                Ok(vec![])
+            }
             FormKind::Time => {
                 let tz = value(2).parse()?;
                 let mut view = self.requested_view().clone();
@@ -668,6 +815,7 @@ impl App {
                 view.before = boundary(value(1), tz, true)?;
                 view.top = None;
                 view.selected = 0;
+                view.bursts.clear();
                 validate_view(&view)?;
                 self.session.timezone = value(2).into();
                 Ok(vec![self.load(Load::Replace, Some(view), None, true)])
@@ -873,7 +1021,7 @@ impl App {
                 Modal::Tags => {
                     if key.code == KeyCode::Char('r') {
                         self.form(FormKind::Reload);
-                    } else if let Some(record) = self.selected().map(|r| r.key.record) {
+                    } else if let Some(record) = self.selected_event().map(|r| r.key.record) {
                         let tag = match key.code {
                             KeyCode::Char('0') => Some(Some(Tag::None)),
                             KeyCode::Char('1') => Some(Some(Tag::Suspicious)),
@@ -980,7 +1128,7 @@ impl App {
                     )];
                 }
                 ('m', KeyCode::Char(name @ 'a'..='z')) => {
-                    if let Some(key) = self.selected().map(|r| r.key) {
+                    if let Some(key) = self.selected().map(|r| r.key()) {
                         self.session.bookmarks.retain(|m| m.name != name);
                         self.session.bookmarks.push(Bookmark { name, key });
                         self.dirty_session = true;
@@ -1013,6 +1161,10 @@ impl App {
             }
         }
         match key.code {
+            KeyCode::Char('c') if key.modifiers.is_empty() => return self.collapse_burst(),
+            KeyCode::Char('C') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
+                self.form(FormKind::Burst);
+            }
             KeyCode::Char(number @ '1'..='9')
                 if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() =>
             {
@@ -1061,8 +1213,10 @@ impl App {
                 self.remember();
             }
             KeyCode::Tab => {
-                if let Some((record, tag)) = self.selected().map(|r| (r.key.record, r.tag.next())) {
-                    for row in &mut self.rows {
+                if let Some((record, tag)) =
+                    self.selected_event().map(|r| (r.key.record, r.tag.next()))
+                {
+                    for row in self.rows.iter_mut().filter_map(DisplayRow::event_mut) {
                         if row.key.record == record {
                             row.tag = tag;
                             row.automatic = false;
@@ -1070,9 +1224,16 @@ impl App {
                     }
                     return vec![Action::Command(Command::Tag(record, Some(tag)))];
                 }
+                self.status = "Expand the burst to assess an individual record".into();
             }
             KeyCode::Enter | KeyCode::F(3) => {
-                if let Some(row) = self.selected() {
+                if matches!(self.selected(), Some(DisplayRow::Burst(_))) {
+                    if self.pending.is_none() {
+                        return self.expand_burst().into_iter().collect();
+                    }
+                    return vec![];
+                }
+                if let Some(row) = self.selected_event() {
                     let timezone = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
                     return vec![Action::Command(Command::Detail(row.key.record, timezone))];
                 }
@@ -1100,7 +1261,7 @@ impl App {
             }
             KeyCode::Char('X') => self.form(FormKind::Directory),
             KeyCode::Char('x') => {
-                if let Some(path) = self.selected().map(|r| r.path.clone()) {
+                if let Some(path) = self.selected_event().map(|r| r.path.clone()) {
                     let pattern = format!("^{}$", regex::escape(&path));
                     let mut view = self.requested_view().clone();
                     if !view.predicate.exclude.contains(&pattern) {

@@ -267,7 +267,7 @@ impl App {
                 .session
                 .bookmarks
                 .iter()
-                .any(|mark| mark.key == row.key);
+                .any(|mark| mark.key == row.key());
             if bookmarked || selected {
                 frame.render_widget(
                     Paragraph::new(if bookmarked { "●" } else { "▌" }).style(base.fg(p.accent)),
@@ -275,15 +275,69 @@ impl App {
                 );
             }
             let timestamp = tz
-                .timestamp_opt(row.key.epoch, 0)
+                .timestamp_opt(row.key().epoch, 0)
                 .single()
                 .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_else(|| row.key.epoch.to_string());
+                .unwrap_or_else(|| row.key().epoch.to_string());
             frame.render_widget(Paragraph::new(timestamp).style(base.fg(p.muted)), cells[1]);
             frame.render_widget(
-                Paragraph::new(display_text(&row.host)).style(base.fg(p.host(&row.host))),
+                Paragraph::new(display_text(row.host())).style(base.fg(p.host(row.host()))),
                 cells[2],
             );
+            if let DisplayRow::Burst(burst) = row {
+                let end = tz
+                    .timestamp_opt(burst.last.epoch, 0)
+                    .single()
+                    .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_else(|| burst.last.epoch.to_string());
+                frame.render_widget(
+                    Paragraph::new(macb(burst.macb).replace('.', "·")).style(base.fg(p.muted)),
+                    cells[3],
+                );
+                let matches = if burst.ioc_matches == 0 {
+                    String::new()
+                } else {
+                    format!(" · {} IOC matches", burst.ioc_matches)
+                };
+                frame.render_widget(
+                    Paragraph::new(format!(
+                        "▶ {} events · through {end}{matches} · Enter expand",
+                        burst.count,
+                    ))
+                    .style(
+                        base.fg(if burst.ioc_matches > 0 {
+                            p.amber
+                        } else {
+                            p.accent
+                        })
+                        .add_modifier(Modifier::BOLD),
+                    ),
+                    Rect::new(
+                        cells[4].x,
+                        area.y,
+                        area.right().saturating_sub(cells[4].x).saturating_sub(
+                            if burst.tagged > 0 {
+                                cells[5].width + 1
+                            } else {
+                                0
+                            },
+                        ),
+                        1,
+                    ),
+                );
+                if burst.tagged > 0 {
+                    frame.render_widget(
+                        Paragraph::new(format!("{} tagged", burst.tagged))
+                            .alignment(Alignment::Right)
+                            .style(base.fg(p.amber)),
+                        cells[5],
+                    );
+                }
+                continue;
+            }
+            let DisplayRow::Event(row) = row else {
+                unreachable!()
+            };
             let flags = ['m', 'a', 'c', 'b']
                 .into_iter()
                 .enumerate()
@@ -380,9 +434,11 @@ impl App {
             label("TAB ", p.violet),
             label("tag   ", p.muted),
             label("ENTER ", p.accent),
-            label("inspect   ", p.muted),
-            label("gt/gT ", p.accent),
-            label("tabs   ", p.muted),
+            label("inspect/expand   ", p.muted),
+            label("c ", p.accent),
+            label("collapse   ", p.muted),
+            label("C ", p.accent),
+            label("threshold   ", p.muted),
             label("Esc ", p.muted),
             label("cancel", p.subtle),
         ]);
@@ -446,6 +502,7 @@ impl App {
             ),
             Modal::Form(form) => (
                 match form.kind {
+                    FormKind::Burst => "Burst threshold",
                     FormKind::Time => "Timeframe",
                     FormKind::Filters => "Filter timeline",
                     FormKind::Directory => "Exclude directory",

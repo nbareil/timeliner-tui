@@ -101,7 +101,7 @@ impl App {
             | MouseEventKind::Drag(MouseButton::Left) => {
                 if self.modal.is_none() && self.ready && self.mouse_state.timeline.contains(point) {
                     let slot = (event.row - self.mouse_state.timeline.y) as usize;
-                    let Some(focus) = self.rows.get(self.top + slot).map(|row| row.key) else {
+                    let Some(focus) = self.rows.get(self.top + slot).map(|row| row.key()) else {
                         self.mouse_state.last_click = None;
                         return vec![];
                     };
@@ -179,14 +179,16 @@ mod tests {
         App {
             ready: true,
             rows: (0..3)
-                .map(|record| Row {
-                    key: EventKey { epoch: 1, record },
-                    macb: 15,
-                    host: "test".into(),
-                    path: format!("/test/{record}"),
-                    tag: Tag::None,
-                    automatic: false,
-                    ioc_match: false,
+                .map(|record| {
+                    DisplayRow::Event(Row {
+                        key: EventKey { epoch: 1, record },
+                        macb: 15,
+                        host: "test".into(),
+                        path: format!("/test/{record}"),
+                        tag: Tag::None,
+                        automatic: false,
+                        ioc_match: false,
+                    })
                 })
                 .collect(),
             mouse_state: MouseState {

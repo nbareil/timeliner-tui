@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend, style::Color};
 use timeliner_tui::{
-    model::{EventKey, Row, Tag, View},
+    model::{DisplayRow, EventKey, Row, Tag, View},
     ui::{Action, App},
     worker::Command,
 };
@@ -14,17 +14,19 @@ fn app() -> App {
     app.ready = true;
     app.height = 10;
     app.rows = (0..100)
-        .map(|id| Row {
-            key: EventKey {
-                epoch: 1_600_000_000 + id,
-                record: id,
-            },
-            macb: 15,
-            host: "host-a".into(),
-            path: format!("/tmp/file-{id}"),
-            tag: Tag::None,
-            automatic: false,
-            ioc_match: false,
+        .map(|id| {
+            DisplayRow::Event(Row {
+                key: EventKey {
+                    epoch: 1_600_000_000 + id,
+                    record: id,
+                },
+                macb: 15,
+                host: "host-a".into(),
+                path: format!("/tmp/file-{id}"),
+                tag: Tag::None,
+                automatic: false,
+                ioc_match: false,
+            })
         })
         .collect();
     app
@@ -41,7 +43,9 @@ fn arrows_keep_the_same_event_selected_and_jk_never_scroll() {
     assert_eq!(app.top, 1);
     assert_eq!(app.session.views[0].selected, 4);
     assert_eq!(
-        app.rows[app.top + app.session.views[0].selected].key.record,
+        app.rows[app.top + app.session.views[0].selected]
+            .key()
+            .record,
         5
     );
     for _ in 0..20 {
@@ -63,7 +67,7 @@ fn tab_tags_record_and_enter_requests_details() {
         actions.as_slice(),
         [Action::Command(Command::Tag(0, Some(Tag::Suspicious)))]
     ));
-    assert_eq!(app.rows[0].tag, Tag::Suspicious);
+    assert_eq!(app.rows[0].event().unwrap().tag, Tag::Suspicious);
     app.session.timezone = "America/New_York".into();
     for code in [KeyCode::Enter, KeyCode::F(3)] {
         let actions = key(&mut app, code);
@@ -107,7 +111,9 @@ fn q_remains_available_in_forms_and_bookmark_commands() {
     key(&mut app, KeyCode::Char('\''));
     assert!(key(&mut app, KeyCode::Char('q')).is_empty());
     assert_eq!(
-        app.rows[app.top + app.session.views[0].selected].key.record,
+        app.rows[app.top + app.session.views[0].selected]
+            .key()
+            .record,
         0
     );
     key(&mut app, KeyCode::F(8));
@@ -149,7 +155,7 @@ fn number_keys_select_tabs_and_ignore_current_or_missing_tabs() {
         ..View::default()
     });
     let original_rows = app.rows.clone();
-    let original_top = original_rows[0].key;
+    let original_top = original_rows[0].key();
     assert!(key(&mut app, KeyCode::Char('1')).is_empty());
     assert!(key(&mut app, KeyCode::Char('9')).is_empty());
     assert_eq!(app.session.active, 0);
@@ -391,8 +397,8 @@ fn bookmark_markers_follow_exact_events_and_update_after_reassignment_and_deleti
         for width in [60, 80, 120] {
             let mut app = app();
             app.session.theme = theme;
-            app.rows[1].key.record = app.rows[0].key.record;
-            app.rows[2].key.epoch = app.rows[0].key.epoch;
+            app.rows[1].event_mut().unwrap().key.record = app.rows[0].key().record;
+            app.rows[2].event_mut().unwrap().key.epoch = app.rows[0].key().epoch;
             let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
             key(&mut app, KeyCode::Char('m'));
             key(&mut app, KeyCode::Char('a'));
@@ -433,13 +439,13 @@ fn adding_an_exclusion_keeps_the_selected_event_when_earlier_rows_disappear() {
     app.session.views[0].selected = 8;
     // Equal timestamps must still preserve the exact source record.
     for row in &mut app.rows[20..30] {
-        row.key.epoch = 1_600_000_020;
+        row.event_mut().unwrap().key.epoch = 1_600_000_020;
     }
-    let focus = app.rows[28].key;
-    let top = app.rows[20].key;
+    let focus = app.rows[28].key();
+    let top = app.rows[20].key();
     let filtered = app.rows[20..]
         .iter()
-        .filter(|row| ![21, 24, 27].contains(&row.key.record))
+        .filter(|row| ![21, 24, 27].contains(&row.key().record))
         .cloned()
         .collect();
     key(&mut app, KeyCode::F(5));
@@ -455,8 +461,11 @@ fn adding_an_exclusion_keeps_the_selected_event_when_earlier_rows_disappear() {
         request.generation,
         filtered,
     ));
-    assert_eq!(app.rows[app.top].key, top);
-    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+    assert_eq!(app.rows[app.top].key(), top);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        focus
+    );
 }
 
 #[test]
@@ -465,9 +474,9 @@ fn excluding_the_selected_event_moves_to_the_next_remaining_event() {
     app.top = 20;
     app.session.views[0].selected = 8;
     for row in &mut app.rows[20..=28] {
-        row.path = "/noise".into();
+        row.event_mut().unwrap().path = "/noise".into();
     }
-    let next = app.rows[29].key;
+    let next = app.rows[29].key();
     let filtered = app.rows[29..].to_vec();
     let actions = key(&mut app, KeyCode::Char('x'));
     let [Action::Page(request)] = actions.as_slice() else {
@@ -477,7 +486,10 @@ fn excluding_the_selected_event_moves_to_the_next_remaining_event() {
         request.generation,
         filtered,
     ));
-    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, next);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        next
+    );
 }
 
 #[test]
@@ -485,7 +497,7 @@ fn excluding_all_events_and_undoing_keeps_a_selection_below_the_top_row() {
     let mut app = app();
     app.top = 20;
     app.session.views[0].selected = 8;
-    let focus = app.rows[28].key;
+    let focus = app.rows[28].key();
     let restored = app.rows[28..].to_vec();
     key(&mut app, KeyCode::Char('X'));
     let actions = key(&mut app, KeyCode::Enter);
@@ -512,17 +524,20 @@ fn excluding_all_events_and_undoing_keeps_a_selection_below_the_top_row() {
         request.generation,
         restored,
     ));
-    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        focus
+    );
 }
 
 #[test]
 fn removing_an_exclusion_seeks_the_selected_event_if_it_is_beyond_the_new_page() {
     let mut app = app();
-    app.rows[21].key.epoch += 1000;
+    app.rows[21].event_mut().unwrap().key.epoch += 1000;
     app.top = 20;
     app.session.views[0].selected = 1;
     app.session.views[0].predicate.exclude = vec!["noise".into()];
-    let focus = app.rows[21].key;
+    let focus = app.rows[21].key();
     let focused = app.rows[21].clone();
     let actions = key(&mut app, KeyCode::Char('u'));
     let [Action::Page(request)] = actions.as_slice() else {
@@ -531,7 +546,7 @@ fn removing_an_exclusion_seeks_the_selected_event_if_it_is_beyond_the_new_page()
     let inserted = (0..request.limit)
         .map(|index| {
             let mut row = app.rows[20].clone();
-            row.key.epoch += index as i64;
+            row.event_mut().unwrap().key.epoch += index as i64;
             row
         })
         .collect();
@@ -548,7 +563,10 @@ fn removing_an_exclusion_seeks_the_selected_event_if_it_is_beyond_the_new_page()
         request.generation,
         vec![focused],
     ));
-    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        focus
+    );
 }
 
 #[test]
@@ -556,7 +574,7 @@ fn exclusion_edits_compose_while_loading_and_undo_preserves_the_position() {
     let mut app = app();
     app.top = 20;
     app.session.views[0].after = Some(1_600_000_010);
-    let anchor = app.rows[20].key;
+    let anchor = app.rows[20].key();
     let actions = key(&mut app, KeyCode::Char('x'));
     let [Action::Page(first)] = actions.as_slice() else {
         panic!()
@@ -589,7 +607,7 @@ fn exclusion_edits_compose_while_loading_and_undo_preserves_the_position() {
 fn undoing_an_exclusion_after_no_matches_restores_the_previous_position() {
     let mut app = app();
     app.top = 20;
-    let anchor = app.rows[20].key;
+    let anchor = app.rows[20].key();
     key(&mut app, KeyCode::Char('X'));
     let actions = key(&mut app, KeyCode::Enter);
     let [Action::Page(forward)] = actions.as_slice() else {
@@ -674,7 +692,7 @@ fn directory_exclusion_backspace_moves_by_components_and_stops_at_roots() {
         let mut app = app();
         app.top = 20;
         app.session.views[0].selected = 4;
-        app.rows[24].path = path.into();
+        app.rows[24].event_mut().unwrap().path = path.into();
         assert!(
             app.key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT))
                 .is_empty()
@@ -697,7 +715,7 @@ fn directory_exclusion_backspace_moves_by_components_and_stops_at_roots() {
         let [Action::Page(request)] = actions.as_slice() else {
             panic!("Expected directory exclusion for {path}")
         };
-        assert_eq!(request.anchor, Some(app.rows[20].key));
+        assert_eq!(request.anchor, Some(app.rows[20].key()));
         let pattern = regex::Regex::new(&request.view.predicate.exclude[0]).unwrap();
         assert!(pattern.is_match(directory), "{path}: {pattern}");
         assert!(pattern.is_match(descendant), "{path}: {pattern}");
@@ -747,7 +765,8 @@ fn directory_exclusion_can_be_edited_cancelled_and_combined_with_pending_filters
 #[test]
 fn directory_editor_shows_the_end_of_long_paths() {
     let mut app = app();
-    app.rows[0].path = format!("/{}répertoire-final/file", "long-directory/".repeat(20));
+    app.rows[0].event_mut().unwrap().path =
+        format!("/{}répertoire-final/file", "long-directory/".repeat(20));
     key(&mut app, KeyCode::Char('X'));
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
@@ -767,7 +786,7 @@ fn filter_form_removes_individual_exclusions_and_focuses_new_ones() {
     let mut app = app();
     app.top = 20;
     app.session.views[0].predicate.exclude = vec!["first".into(), "second".into()];
-    let anchor = app.rows[20].key;
+    let anchor = app.rows[20].key();
     key(&mut app, KeyCode::F(5));
     for _ in 0..4 {
         key(&mut app, KeyCode::Tab);
@@ -788,7 +807,7 @@ fn filter_form_removes_individual_exclusions_and_focuses_new_ones() {
 #[test]
 fn tag_is_right_aligned_and_keys_survive_standard_terminal_resize() {
     let mut app = app();
-    app.rows[0].tag = Tag::Suspicious;
+    app.rows[0].event_mut().unwrap().tag = Tag::Suspicious;
     for (width, height) in [(120, 30), (80, 24), (60, 12)] {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -873,10 +892,10 @@ fn contrast(fg: Color, bg: Color) -> f64 {
 #[test]
 fn ioc_highlights_and_tags_have_explicit_contrasting_backgrounds() {
     let mut app = app();
-    app.rows[1].ioc_match = true;
-    app.rows[2].tag = Tag::Suspicious;
-    app.rows[3].tag = Tag::Ioc;
-    app.rows[4].tag = Tag::Malicious;
+    app.rows[1].event_mut().unwrap().ioc_match = true;
+    app.rows[2].event_mut().unwrap().tag = Tag::Suspicious;
+    app.rows[3].event_mut().unwrap().tag = Tag::Ioc;
+    app.rows[4].event_mut().unwrap().tag = Tag::Malicious;
     for theme in [
         timeliner_tui::theme::Theme::Light,
         timeliner_tui::theme::Theme::Dark,
@@ -959,17 +978,19 @@ fn jumping_to_end_keeps_backward_pagination_available() {
     };
     let generation = request.generation;
     let rows = (1000..1000 + request.limit as i64)
-        .map(|id| Row {
-            key: EventKey {
-                epoch: id,
-                record: id,
-            },
-            macb: 15,
-            host: "a".into(),
-            path: "/a".into(),
-            tag: Tag::None,
-            automatic: true,
-            ioc_match: false,
+        .map(|id| {
+            DisplayRow::Event(Row {
+                key: EventKey {
+                    epoch: id,
+                    record: id,
+                },
+                macb: 15,
+                host: "a".into(),
+                path: "/a".into(),
+                tag: Tag::None,
+                automatic: true,
+                ioc_match: false,
+            })
         })
         .collect();
     app.message(timeliner_tui::worker::Message::Page(generation, rows));
@@ -1021,7 +1042,7 @@ fn errors_from_old_queries_do_not_discard_newer_results() {
         old.generation,
         "old error".into(),
     ));
-    let row = Row {
+    let row = DisplayRow::Event(Row {
         key: EventKey {
             epoch: 200,
             record: 9000,
@@ -1032,12 +1053,12 @@ fn errors_from_old_queries_do_not_discard_newer_results() {
         tag: Tag::None,
         automatic: true,
         ioc_match: false,
-    };
+    });
     app.message(timeliner_tui::worker::Message::Page(
         new.generation,
         vec![row],
     ));
-    assert_eq!(app.rows[0].path, "/new");
+    assert_eq!(app.rows[0].event().unwrap().path, "/new");
 }
 
 #[test]

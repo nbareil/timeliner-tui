@@ -1,7 +1,8 @@
 use crate::{
+    burst,
     export::{self, Export},
     ioc::Rules,
-    model::{EventKey, Row, Session, Tag, View},
+    model::{Burst, DisplayRow, EventKey, Session, Tag, TagChange, View},
     query::{self, Cancellation},
     source::Input,
     store::Store,
@@ -28,6 +29,15 @@ pub struct PageRequest {
     pub reverse: bool,
     pub inclusive: bool,
     pub limit: usize,
+    pub context_before: usize,
+    pub detect_burst: Option<BurstRequest>,
+}
+
+#[derive(Clone)]
+pub struct BurstRequest {
+    pub origin: EventKey,
+    pub host: String,
+    pub threshold: u64,
 }
 
 pub enum Command {
@@ -42,8 +52,10 @@ pub enum Command {
 
 pub enum Message {
     Ready(Session, String),
-    Page(u64, Vec<Row>),
+    Page(u64, Vec<DisplayRow>),
+    Burst(u64, Option<Burst>),
     Progress(u64, String),
+    Tagged(TagChange),
     Changed,
     Detail(String),
     Status(String),
@@ -162,9 +174,9 @@ impl Workers {
                         Command::Save(session) => store.save_session(&session),
                         Command::Tag(id, tag) => (|| -> Result<()> {
                             let revision = store.revision()?;
-                            store.set_tag(id, tag)?;
+                            let change = store.set_tag(id, tag)?;
                             query::update_caches(&store, id, revision)?;
-                            tx.send(Message::Changed)?;
+                            tx.send(Message::Tagged(change))?;
                             Ok(())
                         })(),
                         Command::Detail(id, timezone) => {
@@ -296,9 +308,30 @@ impl Workers {
                     clock: page_clock.clone(),
                     generation: request.generation,
                 };
-                let result = (|| -> Result<Vec<Row>> {
+                let result = (|| -> Result<Message> {
                     let store = Store::reader(&root)?;
-                    query::page(
+                    if let Some(detection) = request.detect_burst {
+                        let found = burst::detect(
+                            &store,
+                            &request.view,
+                            detection.origin,
+                            &detection.host,
+                            detection.threshold,
+                            &cancel,
+                            |count| {
+                                if count.is_multiple_of(65536) {
+                                    let _ = messages_tx.send(Message::Progress(
+                                        request.generation,
+                                        format!(
+                                            "Finding burst: {count} candidates checked (Escape cancels)"
+                                        ),
+                                    ));
+                                }
+                            },
+                        )?;
+                        return Ok(Message::Burst(request.generation, found));
+                    }
+                    let rows = burst::page_with_context(
                         &store,
                         &request.view,
                         query::Page {
@@ -307,6 +340,7 @@ impl Workers {
                             inclusive: request.inclusive,
                             limit: request.limit,
                         },
+                        request.context_before,
                         &cancel,
                         |count| {
                             if count % 65536 == 0 {
@@ -316,14 +350,15 @@ impl Workers {
                                 ));
                             }
                         },
-                    )
+                    )?;
+                    Ok(Message::Page(request.generation, rows))
                 })();
                 if cancel.check().is_err() {
                     continue;
                 }
                 match result {
-                    Ok(rows) => {
-                        let _ = messages_tx.send(Message::Page(request.generation, rows));
+                    Ok(message) => {
+                        let _ = messages_tx.send(message);
                     }
                     Err(error) => {
                         let _ = messages_tx.send(Message::QueryError(

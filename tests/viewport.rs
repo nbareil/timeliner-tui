@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 use std::ops::Range;
 use timeliner_tui::{
-    model::{EventKey, Row, Session, Tag},
+    model::{DisplayRow, EventKey, Row, Session, Tag},
     ui::{Action, App},
     worker::{Command, Message, PageRequest},
 };
@@ -14,15 +14,17 @@ fn event(id: i64) -> EventKey {
     }
 }
 
-fn rows(ids: Range<i64>) -> Vec<Row> {
-    ids.map(|id| Row {
-        key: event(id),
-        macb: 15,
-        host: "host-a".into(),
-        path: format!("/tmp/file-{id}"),
-        tag: Tag::None,
-        automatic: false,
-        ioc_match: false,
+fn rows(ids: Range<i64>) -> Vec<DisplayRow> {
+    ids.map(|id| {
+        DisplayRow::Event(Row {
+            key: event(id),
+            macb: 15,
+            host: "host-a".into(),
+            path: format!("/tmp/file-{id}"),
+            tag: Tag::None,
+            automatic: false,
+            ioc_match: false,
+        })
     })
     .collect()
 }
@@ -60,8 +62,8 @@ fn reposition(app: &mut App, code: KeyCode) -> Vec<Action> {
 fn assert_selection(app: &App, id: i64, slot: usize) {
     let view = &app.session.views[app.session.active];
     assert_eq!(view.selected, slot);
-    assert_eq!(app.rows[app.top + slot].key, event(id));
-    assert_eq!(view.top, Some(app.rows[app.top].key));
+    assert_eq!(app.rows[app.top + slot].key(), event(id));
+    assert_eq!(view.top, Some(app.rows[app.top].key()));
 }
 
 #[test]
@@ -346,11 +348,11 @@ fn repositioning_keeps_selection_when_the_page_cache_is_trimmed() {
         assert_eq!(app.rows.len(), request.limit * 2);
         assert_selection(&app, selected, if reverse { 9 } else { 0 });
         assert_eq!(
-            app.rows.first().unwrap().key.record,
+            app.rows.first().unwrap().key().record,
             if reverse { 872 } else { 1128 }
         );
         assert_eq!(
-            app.rows.last().unwrap().key.record,
+            app.rows.last().unwrap().key().record,
             if reverse { 1127 } else { 1383 }
         );
     }
@@ -411,7 +413,7 @@ fn empty_views_and_cancelled_or_invalid_prefixes_do_not_trigger_other_commands()
         assert_eq!(app.top, 40);
         assert_eq!(app.session.views[0].selected, 3);
         assert!(app.session.views[0].predicate.exclude.is_empty());
-        assert_eq!(app.rows[43].tag, Tag::None);
+        assert_eq!(app.rows[43].event().unwrap().tag, Tag::None);
         assert_eq!(app.session.active, 0);
     }
     key(&mut app, KeyCode::Char('z'));

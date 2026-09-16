@@ -1,24 +1,26 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{Terminal, backend::TestBackend};
 use timeliner_tui::{
-    model::{Bookmark, EventKey, Row, Session, Tag, View},
+    model::{Bookmark, DisplayRow, EventKey, Row, Session, Tag, View},
     ui::{Action, App},
     worker::{Command, Message},
 };
 
-fn rows(start: i64, count: usize) -> Vec<Row> {
+fn rows(start: i64, count: usize) -> Vec<DisplayRow> {
     (start..start + count as i64)
-        .map(|id| Row {
-            key: EventKey {
-                epoch: 1_600_000_000 + id,
-                record: id,
-            },
-            macb: 15,
-            host: "mouse-host".into(),
-            path: format!("/mouse/event-{id:04}"),
-            tag: Tag::None,
-            automatic: false,
-            ioc_match: false,
+        .map(|id| {
+            DisplayRow::Event(Row {
+                key: EventKey {
+                    epoch: 1_600_000_000 + id,
+                    record: id,
+                },
+                macb: 15,
+                host: "mouse-host".into(),
+                path: format!("/mouse/event-{id:04}"),
+                tag: Tag::None,
+                automatic: false,
+                ioc_match: false,
+            })
         })
         .collect()
 }
@@ -89,7 +91,7 @@ fn click_text(app: &mut App, terminal: &Terminal<TestBackend>, text: &str) -> Ve
 
 fn selected(app: &App) -> i64 {
     app.rows[app.top + app.session.views[app.session.active].selected]
-        .key
+        .key()
         .record
 }
 
@@ -294,7 +296,10 @@ fn wheel_scrolled_wrapped_bookmarks_jump_to_the_clicked_event() {
     let (mut app, mut terminal) = setup(45, 18, 128);
     app.session.bookmarks = ('a'..='z')
         .zip(&app.rows)
-        .map(|(name, row)| Bookmark { name, key: row.key })
+        .map(|(name, row)| Bookmark {
+            name,
+            key: row.key(),
+        })
         .collect();
     key(&mut app, KeyCode::F(8));
     draw(&mut app, &mut terminal);

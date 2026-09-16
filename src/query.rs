@@ -1,5 +1,5 @@
 use crate::{
-    model::{EventKey, Predicate, Row, Tag, View, validate_view},
+    model::{Burst, EventKey, Predicate, Row, Tag, View, validate_view},
     store::{Store, configure},
 };
 use anyhow::{Result, bail};
@@ -20,13 +20,14 @@ pub struct Cancellation {
     pub clock: Arc<AtomicU64>,
     pub generation: u64,
 }
-struct ResetCancellation<'a>(&'a Connection);
+pub(crate) struct ResetCancellation<'a>(pub &'a Connection);
 impl Drop for ResetCancellation<'_> {
     fn drop(&mut self) {
         let _ = self.0.progress_handler(0, None::<fn() -> bool>);
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Page {
     pub anchor: Option<EventKey>,
     pub reverse: bool,
@@ -250,6 +251,18 @@ pub fn page(
     view: &View,
     page: Page,
     cancel: &Cancellation,
+    progress: impl FnMut(u64),
+) -> Result<Vec<Row>> {
+    page_omitting(store, view, page, &[], cancel, progress)
+}
+
+/// Folded display pages may omit events; raw queries and exports never do.
+pub(crate) fn page_omitting(
+    store: &Store,
+    view: &View,
+    page: Page,
+    bursts: &[Burst],
+    cancel: &Cancellation,
     mut progress: impl FnMut(u64),
 ) -> Result<Vec<Row>> {
     let Page {
@@ -325,8 +338,18 @@ pub fn page(
                 },
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut skipped_to = None;
         for &(key, macb) in &keys {
             cancel.check()?;
+            // Seek over known host-only runs, rather than reading every hidden
+            // event on each visit. Mixed-host runs retain the other hosts.
+            if let Some(burst) = bursts
+                .iter()
+                .find(|burst| burst.exclusive && burst.contains_key(key))
+            {
+                skipped_to = Some(if reverse { burst.first } else { burst.last });
+                break;
+            }
             let row = details.query_row([key.record], |r| {
                 Ok(Row {
                     key,
@@ -342,17 +365,21 @@ pub fn page(
             if checked.is_multiple_of(1024) {
                 progress(checked);
             }
-            if matcher.matches(&row.path, &row.host, row.tag) {
+            if matcher.matches(&row.path, &row.host, row.tag)
+                && !bursts
+                    .iter()
+                    .any(|burst| burst.host == row.host && burst.contains_key(key))
+            {
                 result.push(row);
                 if result.len() == limit {
                     break;
                 }
             }
         }
-        if result.len() == limit || keys.len() < limit {
+        if result.len() == limit || (skipped_to.is_none() && keys.len() < limit) {
             break;
         }
-        let last = keys.last().unwrap().0;
+        let last = skipped_to.unwrap_or_else(|| keys.last().unwrap().0);
         if reverse {
             hi = last;
             upper = "<";

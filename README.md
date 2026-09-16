@@ -94,6 +94,8 @@ byte offset, original record, and matching rules.
 | F9 | Export |
 | q / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
+| c | Collapse a burst around the selected event; expand a selected summary |
+| C (Shift+c) | Set the burst density threshold |
 | x | Exclude the selected pathname |
 | X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
 | u | Remove the most recent exclusion |
@@ -137,6 +139,47 @@ Marks `a` through `z` persist. If the current filters hide a bookmarked event, a
 new unfiltered tab reveals it. Press `d` followed by the bookmark's letter (for
 example, `da`) to delete it from the timeline or the F8 list. Escape cancels a
 pending shortcut. Text registers and yank commands are not implemented.
+
+## Collapsing filesystem activity bursts
+
+Press **c** anywhere inside a wave of events. The application counts matching
+events per second on the selected host, across all directories and MACB types
+enabled in the current view. Starting at the selected second, it scans backward
+and forward while each consecutive second exceeds the threshold. A sparse or
+empty second ends the burst; no gaps are bridged. An isolated dense second also
+qualifies. Density describes activity, not whether it was a system upgrade.
+
+The default threshold is **more than 100 events per second**. Press **C** to
+change it to a positive whole number; the workspace saves the setting. Changing
+the threshold affects subsequent collapse requests. Counts refer to timeline
+events: a record's timestamp flags combined at the same second count as one event.
+The current timeframe, path, host, assessment, and timestamp-type filters apply.
+
+A summary shows the event count, beginning and end timestamps, combined MACB
+flags, and counts of tagged events and IOC matches when present. Events from
+other hosts stay in chronological order outside the group. The summary stays
+selected, with earlier events visible above it when available so `k` can move
+back into them. Press **Enter**, **F3**,
+or **c** on the summary to expand it and return to the event where you requested
+the fold. Bookmark jumps reveal their exact event. Expand a summary before
+tagging or excluding an individual record.
+
+Folds belong to their tab; forking copies them independently. Applying filters
+clears that tab's folds. Tag edits keep unrelated folds closed and update summary
+tag counts, including when another timestamp of a folded record is assessed.
+In a tag-filtered view, a fold is cleared only if the edit changes its membership;
+other hosts becoming visible remain outside the fold. Reloading IOC rules clears
+folds across tabs. Folds are temporary and reopen expanded after restarting.
+Exports include folded records according to the normal export filters.
+
+Detection runs in the background; Escape cancels it and keeps the current view.
+Large waves still take time to count on their first collapse. Only group
+descriptors and bounded pages are retained in memory. For a folded interval
+containing only the selected host's matching events, scrolling seeks past its
+hidden records. Interleaved hosts can require scanning hidden candidates to
+retrieve the other hosts' events.
+
+See the [terminal capture](docs/images/bursts.txt), rendered from synthetic data.
 
 ## Mouse and tmux
 
@@ -309,6 +352,7 @@ cargo build --release --locked
 cargo test --locked
 cargo test --locked --test viewport
 cargo test --locked --test mouse
+cargo test --locked --test bursts
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 # Optional integration check: Unix, Python 3, and tmux
@@ -325,6 +369,8 @@ Source modules separate bodyfile parsing, IOC rules, source access, SQLite
 storage, indexed queries, export, background workers, and the terminal UI.
 `src/theme.rs` defines the palettes; `src/ui/render.rs` handles presentation.
 `src/ui/mouse.rs` handles pointer input and the controls registered during rendering.
+`src/burst.rs` detects dense seconds and builds display pages containing events
+or fold summaries; raw queries and exports continue to use `src/query.rs`.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
 Integration tests under `tests/` exercise evidence preservation, filtering,

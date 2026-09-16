@@ -60,6 +60,9 @@ pub struct View {
     pub bogus: bool,
     pub top: Option<EventKey>,
     pub selected: usize,
+    /// Presentation-only folds, retained when tag edits leave membership unchanged.
+    #[serde(skip)]
+    pub bursts: Vec<Burst>,
 }
 
 impl Default for View {
@@ -73,6 +76,7 @@ impl Default for View {
             bogus: false,
             top: None,
             selected: 0,
+            bursts: Vec::new(),
         }
     }
 }
@@ -94,6 +98,73 @@ pub struct Row {
     pub ioc_match: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct TagChange {
+    pub host: String,
+    pub path: String,
+    pub before: Tag,
+    pub after: Tag,
+    /// At most four timestamp events for the changed source record.
+    pub events: Vec<(EventKey, u8)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Burst {
+    pub first: EventKey,
+    pub last: EventKey,
+    pub host: String,
+    pub count: u64,
+    pub macb: u8,
+    pub tagged: u64,
+    pub ioc_matches: u64,
+    /// No matching events from other hosts occur in these seconds.
+    pub exclusive: bool,
+    /// Restore the event from which the user requested this fold.
+    pub origin: EventKey,
+}
+
+impl Burst {
+    pub fn contains_key(&self, key: EventKey) -> bool {
+        self.first <= key && key <= self.last
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DisplayRow {
+    Event(Row),
+    Burst(Burst),
+}
+
+impl DisplayRow {
+    pub fn key(&self) -> EventKey {
+        match self {
+            Self::Event(row) => row.key,
+            Self::Burst(burst) => burst.first,
+        }
+    }
+
+    pub fn host(&self) -> &str {
+        match self {
+            Self::Event(row) => &row.host,
+            Self::Burst(burst) => &burst.host,
+        }
+    }
+
+    pub fn event(&self) -> Option<&Row> {
+        match self {
+            Self::Event(row) => Some(row),
+            Self::Burst(_) => None,
+        }
+    }
+
+    pub fn event_mut(&mut self) -> Option<&mut Row> {
+        match self {
+            Self::Event(row) => Some(row),
+            Self::Burst(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bookmark {
     pub name: char,
@@ -108,6 +179,12 @@ pub struct Session {
     pub timezone: String,
     #[serde(default)]
     pub theme: crate::theme::Theme,
+    #[serde(default = "default_burst_threshold")]
+    pub burst_threshold: u64,
+}
+
+pub fn default_burst_threshold() -> u64 {
+    100
 }
 
 impl Default for Session {
@@ -128,6 +205,7 @@ impl Default for Session {
             bookmarks: Vec::new(),
             timezone: "UTC".into(),
             theme: crate::theme::Theme::default(),
+            burst_threshold: default_burst_threshold(),
         }
     }
 }
