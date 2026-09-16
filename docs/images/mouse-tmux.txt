@@ -1,0 +1,35 @@
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                                                                                                                                                                F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                                                                                                                                              ASSESSMENT
+  2020-09-13 12:26:40 source.body                macb /mouse/event-0000
+  2020-09-13 12:26:41 source.body                macb /mouse/event-0001
+  2020-09-13 12:26:42 source.body                macb /mouse/event-0002
+▌ 2020-09-13 12:26:43 source.body                macb /mouse/event-0003
+  2020-09-13 12:26:44 source.body                macb /mouse/event-0004
+  2020-09-13 12:26:45 source.body                macb /mouse/event-0005
+  2020-09-13 12:26:46 source.body                macb /mouse/event-0006
+  2020-09-13 12:26:47 source.body                macb /mouse/event-0007
+  2020-09-13 12:26:48 source.body                macb /mouse/event-0008
+  2020-09-13 12:26:49 source.body                macb /mouse/event-0009
+  2020-09-13 12:26:50 source.body                macb /mouse/event-0010
+  2020-09-13 12:26:51 source.body                macb /mouse/event-0011
+  2020-09-13 12:26:52 source.body                macb /mouse/event-0012
+  2020-09-13 12:26:53 source.body                macb /mouse/event-0013
+  2020-09-13 12:26:54 source.body                macb /mouse/event-0014
+  2020-09-13 12:26:55 source.body                macb /mouse/event-0015
+  2020-09-13 12:26:56 source.body                macb /mouse/event-0016
+  2020-09-13 12:26:57 source.body                macb /mouse/event-0017
+  2020-09-13 12:26:58 source.body                macb /mouse/event-0018
+  2020-09-13 12:26:59 source.body                macb /mouse/event-0019
+  2020-09-13 12:27:00 source.body                macb /mouse/event-0020
+  2020-09-13 12:27:01 source.body                macb /mouse/event-0021
+  2020-09-13 12:27:02 source.body                macb /mouse/event-0022
+  2020-09-13 12:27:03 source.body                macb /mouse/event-0023
+  2020-09-13 12:27:04 source.body                macb /mouse/event-0024
+  2020-09-13 12:27:05 source.body                macb /mouse/event-0025
+  2020-09-13 12:27:06 source.body                macb /mouse/event-0026
+  ● Ready
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect   gt/gT tabs   Esc cancel
+ F1  Help                  F2  Tags                  F3  Detail               F4  Time                  F5  Filter                F6  Fork                  F7  Views                 F8  Marks                F9  Export                F10  Quit

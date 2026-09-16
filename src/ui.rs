@@ -9,7 +9,10 @@ use crate::{
 use anyhow::{Result, bail};
 use chrono::TimeZone;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        KeyModifiers, MouseEventKind,
+    },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -28,7 +31,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod mouse;
 mod render;
+use mouse::{MouseState, MouseTarget};
 
 const DELETE_MARK_PROMPT: &str = "Delete bookmark: type a–z (Esc cancels)";
 
@@ -38,6 +43,10 @@ TIMELINER TUI
 ↑/↓ scroll the view, keeping the same event selected while visible.
 If it leaves the screen, the nearest visible event becomes selected.
 j/k move the highlight within the visible screen.
+Mouse: wheel scrolls; click/drag selects; double-click/right-click inspects.
+Click tabs, function buttons, menu choices, and form fields.
+Mouse wheel scrolls details/help/bookmarks or moves between form fields.
+Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
 zt/zz/zb put the selected event at the top/middle/bottom.
 z Enter / z. / z- do the same. Selection stays on the same event.
@@ -169,6 +178,7 @@ pub struct App {
     end_before: bool,
     end_after: bool,
     dirty_session: bool,
+    mouse_state: MouseState,
 }
 
 impl Default for App {
@@ -189,6 +199,7 @@ impl Default for App {
             end_before: false,
             end_after: false,
             dirty_session: false,
+            mouse_state: MouseState::default(),
         }
     }
 }
@@ -753,6 +764,7 @@ impl App {
         if key.kind == KeyEventKind::Release {
             return vec![];
         }
+        self.mouse_state.reset_click();
         if key.code == KeyCode::F(10)
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
         {
@@ -1153,10 +1165,18 @@ fn expand_home(value: &str) -> PathBuf {
 }
 
 struct TerminalGuard;
+fn restore_terminal() {
+    let _ = execute!(
+        io::stdout(),
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        crossterm::cursor::Show
+    );
+    let _ = disable_raw_mode();
+}
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
+        restore_terminal();
     }
 }
 pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
@@ -1165,11 +1185,17 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
     }
     enable_raw_mode()?;
     let _guard = TerminalGuard;
-    execute!(io::stdout(), EnterAlternateScreen)?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+    // Keep SGR coordinates, including columns beyond 223, but only report
+    // motion while a button is held to limit traffic through tmux and SSH.
+    #[cfg(unix)]
+    execute!(
+        io::stdout(),
+        crossterm::style::Print("\x1b[?1003l\x1b[?1002h")
+    )?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
+        restore_terminal();
         previous(info);
     }));
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
@@ -1187,6 +1213,18 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
             match event::read()? {
                 Event::Key(key) => {
                     actions.extend(app.key(key));
+                    dirty = true;
+                }
+                Event::Mouse(mouse)
+                    if matches!(
+                        mouse.kind,
+                        MouseEventKind::Down(_)
+                            | MouseEventKind::Drag(_)
+                            | MouseEventKind::ScrollUp
+                            | MouseEventKind::ScrollDown
+                    ) =>
+                {
+                    actions.extend(app.mouse(mouse));
                     dirty = true;
                 }
                 Event::Resize(_, _) => dirty = true,

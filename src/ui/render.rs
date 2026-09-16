@@ -20,7 +20,7 @@ fn keycap(key: &str, p: Palette) -> Span<'static> {
 }
 
 impl App {
-    fn draw_tabs(&self, frame: &mut Frame, area: Rect, p: Palette) {
+    fn draw_tabs(&mut self, frame: &mut Frame, area: Rect, p: Palette) {
         if area.is_empty() {
             return;
         }
@@ -61,6 +61,8 @@ impl App {
             cells[1],
         );
         if theme_width > 0 {
+            self.mouse_state
+                .target(cells[2], MouseTarget::Key(KeyCode::F(11)));
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     keycap("F11", p),
@@ -108,12 +110,15 @@ impl App {
             end += 1;
         }
         if start > 0 {
+            self.mouse_state
+                .target(columns[0], MouseTarget::Tab(start - 1));
             frame.render_widget(
                 Paragraph::new("<").style(p.base().fg(p.accent).bg(p.surface)),
                 columns[0],
             );
         }
         if end < titles.len() {
+            self.mouse_state.target(columns[2], MouseTarget::Tab(end));
             frame.render_widget(
                 Paragraph::new(">")
                     .alignment(Alignment::Right)
@@ -134,9 +139,17 @@ impl App {
                 ),
             columns[1],
         );
+        let mut x = columns[1].x;
+        for (index, title) in titles.iter().enumerate().take(end).skip(start) {
+            let width =
+                (title.width() + 2).min(columns[1].right().saturating_sub(x) as usize) as u16;
+            self.mouse_state
+                .target(Rect::new(x, strip.y, width, 1), MouseTarget::Tab(index));
+            x = x.saturating_add(width).saturating_add(1);
+        }
     }
 
-    fn draw_filters(&self, frame: &mut Frame, area: Rect, p: Palette) {
+    fn draw_filters(&mut self, frame: &mut Frame, area: Rect, p: Palette) {
         let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
         let stamp = |epoch: Option<i64>, empty: &str| {
             epoch
@@ -180,9 +193,21 @@ impl App {
             Paragraph::new(vec![timeframe, filters]).style(p.base()),
             area,
         );
+        for (offset, function) in [(0, 4), (1, 5)] {
+            self.mouse_state.target(
+                Rect::new(area.x, area.y + offset, area.width, 1).intersection(area),
+                MouseTarget::Key(KeyCode::F(function)),
+            );
+        }
     }
 
-    fn draw_timeline(&self, frame: &mut Frame, body: Rect, p: Palette) {
+    fn draw_timeline(&mut self, frame: &mut Frame, body: Rect, p: Palette) {
+        self.mouse_state.timeline = Rect::new(
+            body.x,
+            body.y.saturating_add(1),
+            body.width,
+            body.height.saturating_sub(1),
+        );
         let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
         let host_width = match body.width {
             0..70 => 10,
@@ -364,7 +389,7 @@ impl App {
         frame.render_widget(Paragraph::new(vec![state, hints]).style(p.base()), area);
     }
 
-    fn draw_keybar(&self, frame: &mut Frame, area: Rect, p: Palette) {
+    fn draw_keybar(&mut self, frame: &mut Frame, area: Rect, p: Palette) {
         if area.is_empty() {
             return;
         }
@@ -378,6 +403,8 @@ impl App {
             let cells = Layout::horizontal(vec![Constraint::Fill(1); group.len()]).split(strip);
             for (i, action) in group.iter().enumerate() {
                 let number = row * per_row + i + 1;
+                self.mouse_state
+                    .target(cells[i], MouseTarget::Key(KeyCode::F(number as u8)));
                 frame.render_widget(
                     Paragraph::new(Line::from(vec![
                         keycap(&format!("F{number}"), p),
@@ -396,7 +423,7 @@ impl App {
         let (title, subtitle, max_width, wanted_height) = match modal {
             Modal::Text(title, _, _) => (
                 *title,
-                "↑↓ / PgUp PgDn scroll",
+                "Wheel / ↑↓ / PgUp PgDn scroll",
                 112,
                 area.height.saturating_sub(4),
             ),
@@ -441,6 +468,10 @@ impl App {
             width,
             height,
         );
+        // Only the topmost dialog receives clicks; the underlying timeline,
+        // tabs, and function bar remain visible but inactive.
+        self.mouse_state.targets.clear();
+        self.mouse_state.modal = Some(popup);
         let shadow = Rect::new(
             popup.x + 1,
             popup.y + 1,
@@ -449,7 +480,7 @@ impl App {
         );
         fill(frame, shadow, p.base().bg(p.shadow));
         frame.render_widget(Clear, popup);
-        let block = Block::default()
+        let mut block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(p.border))
@@ -460,6 +491,26 @@ impl App {
             )))
             .title_bottom(Line::from(label(" Esc close ", p.muted)).right_aligned())
             .padding(Padding::horizontal(if width >= 50 { 2 } else { 1 }));
+        self.mouse_state.target(
+            Rect::new(
+                popup.right().saturating_sub(12).max(popup.x),
+                popup.bottom().saturating_sub(1),
+                11,
+                1,
+            )
+            .intersection(popup),
+            MouseTarget::Key(KeyCode::Esc),
+        );
+        if matches!(modal, Modal::Form(_)) {
+            block = block.title_bottom(Line::from(label(" Enter apply ", p.accent)).left_aligned());
+            // On narrow dialogs, give the close control priority over apply.
+            if popup.width >= 27 && popup.height > 0 {
+                self.mouse_state.target(
+                    Rect::new(popup.x + 1, popup.bottom() - 1, 13, 1),
+                    MouseTarget::Key(KeyCode::Enter),
+                );
+            }
+        }
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
         if inner.height < 2 {
@@ -469,6 +520,20 @@ impl App {
             Paragraph::new(subtitle).style(p.base().fg(p.muted).bg(p.surface)),
             Rect::new(inner.x, inner.y, inner.width, 1),
         );
+        if matches!(modal, Modal::Form(_))
+            && let Some(offset) = subtitle.find("Enter ")
+        {
+            self.mouse_state.target(
+                Rect::new(
+                    inner.x + Line::from(&subtitle[..offset]).width() as u16,
+                    inner.y,
+                    (subtitle.len() - offset) as u16,
+                    1,
+                )
+                .intersection(inner),
+                MouseTarget::Key(KeyCode::Enter),
+            );
+        }
         let content = Rect::new(
             inner.x,
             inner.y + 2,
@@ -522,6 +587,13 @@ impl App {
                 );
             }
             Modal::Tags => {
+                for (offset, key) in [(0, '0'), (1, '1'), (2, '2'), (3, '3'), (5, 'a'), (6, 'r')] {
+                    self.mouse_state.target(
+                        Rect::new(content.x, content.y + offset, content.width, 1)
+                            .intersection(content),
+                        MouseTarget::Key(KeyCode::Char(key)),
+                    );
+                }
                 let lines = vec![
                     menu("0", "Clear assessment", "Manual override", p.text, p),
                     menu("1", "SUSPICIOUS", "Needs investigation", p.amber, p),
@@ -545,6 +617,13 @@ impl App {
                 frame.render_widget(Paragraph::new(lines).style(p.base().bg(p.surface)), content);
             }
             Modal::Views => {
+                for (offset, key) in [(0, '1'), (1, '2'), (2, '3'), (3, '4'), (5, 'n'), (6, 'x')] {
+                    self.mouse_state.target(
+                        Rect::new(content.x, content.y + offset, content.width, 1)
+                            .intersection(content),
+                        MouseTarget::Key(KeyCode::Char(key)),
+                    );
+                }
                 let lines = vec![
                     menu("1", "All tagged", "Every assessed record", p.accent, p),
                     menu("2", "SUSPICIOUS", "Review flagged activity", p.amber, p),
@@ -578,23 +657,59 @@ impl App {
                     )));
                 }
                 let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
+                let mut offset = Paragraph::new(lines.clone())
+                    .wrap(Wrap { trim: false })
+                    .line_count(content.width);
+                let mut marks = Vec::new();
                 for mark in &self.session.bookmarks {
                     let time = tz
                         .timestamp_opt(mark.key.epoch, 0)
                         .single()
                         .map(|t| t.to_rfc3339())
                         .unwrap_or_else(|| mark.key.epoch.to_string());
-                    lines.push(menu(
+                    let line = menu(
                         &mark.name.to_string(),
                         &time,
                         &format!("record {}", mark.key.record),
                         p.text,
                         p,
-                    ));
+                    );
+                    let height = Paragraph::new(line.clone())
+                        .wrap(Wrap { trim: false })
+                        .line_count(content.width);
+                    marks.push((offset, height, mark.name));
+                    offset += height;
+                    lines.push(line);
+                }
+                self.mouse_state.mark_scroll_max = offset.saturating_sub(content.height as usize);
+                self.mouse_state.mark_scroll = self
+                    .mouse_state
+                    .mark_scroll
+                    .min(self.mouse_state.mark_scroll_max);
+                for (offset, height, name) in marks {
+                    let start = offset.saturating_sub(self.mouse_state.mark_scroll);
+                    let end = (offset + height)
+                        .saturating_sub(self.mouse_state.mark_scroll)
+                        .min(content.height as usize);
+                    if start < end {
+                        self.mouse_state.target(
+                            Rect::new(
+                                content.x,
+                                content.y + start as u16,
+                                content.width,
+                                (end - start) as u16,
+                            ),
+                            MouseTarget::Key(KeyCode::Char(name)),
+                        );
+                    }
                 }
                 frame.render_widget(
                     Paragraph::new(lines)
                         .wrap(Wrap { trim: false })
+                        .scroll((
+                            self.mouse_state.mark_scroll.min(u16::MAX as usize) as u16,
+                            0,
+                        ))
                         .style(p.base().bg(p.surface)),
                     content,
                 );
@@ -614,6 +729,10 @@ impl App {
                     if y + 1 >= content.bottom() {
                         break;
                     }
+                    self.mouse_state.target(
+                        Rect::new(content.x, y, content.width, 2),
+                        MouseTarget::Field(index),
+                    );
                     frame.render_widget(
                         Paragraph::new(name.as_str()).style(p.base().fg(p.muted).bg(p.surface)),
                         Rect::new(content.x, y, content.width, 1),
@@ -651,6 +770,15 @@ impl App {
                     } else {
                         "Enter applies your changes".into()
                     };
+                    if form.error.is_empty()
+                        && let Some(offset) = hint.find("Enter appl")
+                    {
+                        let x = content.x + Line::from(&hint[..offset]).width() as u16;
+                        self.mouse_state.target(
+                            Rect::new(x, content.bottom() - 1, 11, 1).intersection(content),
+                            MouseTarget::Key(KeyCode::Enter),
+                        );
+                    }
                     frame.render_widget(
                         Paragraph::new(hint).style(
                             p.base()
@@ -669,6 +797,9 @@ impl App {
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
+        self.mouse_state.targets.clear();
+        self.mouse_state.timeline = Rect::default();
+        self.mouse_state.modal = None;
         let area = frame.area();
         let p = self.session.theme.palette();
         fill(frame, area, p.base());

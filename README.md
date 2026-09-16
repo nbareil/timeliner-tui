@@ -133,6 +133,46 @@ new unfiltered tab reveals it. Press `d` followed by the bookmark's letter (for
 example, `da`) to delete it from the timeline or the F8 list. Escape cancels a
 pending shortcut. Text registers and yank commands are not implemented.
 
+## Mouse and tmux
+
+Mouse support is enabled while the TUI is open:
+
+| Gesture | Action |
+| --- | --- |
+| Wheel | Scroll three rows, keeping the selected event while it is visible |
+| Left click / drag | Select an event |
+| Double click / right click | Inspect the clicked event |
+| Click a tab or its `<` / `>` overflow control | Switch tabs |
+| Click a function button, menu choice, or timeframe/filter row | Open or activate that control |
+| Click a form field | Focus it for typing |
+| Click **Enter apply** / **Esc close** in a dialog | Apply / close |
+
+The wheel scrolls help, record details, and bookmarks. In forms, it moves between
+fields. An open dialog receives mouse input; clicks outside it do not change the
+timeline.
+
+Enable mouse input in `~/.tmux.conf`:
+
+```tmux
+set -g mouse on
+```
+
+To enable it in an existing tmux server:
+
+```sh
+tmux set -g mouse on
+```
+
+The application uses SGR mouse reporting, including coordinates beyond column
+223, and reports dragging without tracking pointer movement over the screen.
+Mouse modes are restored on exit, errors, and panics. Normal tmux mouse
+forwarding works without enabling passthrough.
+
+If custom tmux bindings intercept clicks or the wheel, they must forward events
+to applications with `send-keys -M` when `#{mouse_any_flag}` is set. For copying
+text, enter tmux copy mode with your prefix followed by `[`. Terminal selection
+overrides, often Shift, depend on your terminal.
+
 ## Time and path filters
 
 UTC is the default timezone. `--tz America/New_York` changes display and boundary
@@ -258,13 +298,16 @@ imported as a new source; annotations are never silently reassigned to it.
 ## Development
 
 ```sh
-nix develop path:.
+nix develop .
 cargo run -- timeline.body
 cargo build --release --locked
 cargo test --locked
 cargo test --locked --test viewport
+cargo test --locked --test mouse
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
+# Optional integration check: Unix, Python 3, and tmux
+python3 tests/support/tmux_mouse.py target/debug/timeliner-tui
 nix build path:.
 nix flake check path:.
 ```
@@ -276,10 +319,14 @@ Clippy checks.
 Source modules separate bodyfile parsing, IOC rules, source access, SQLite
 storage, indexed queries, export, background workers, and the terminal UI.
 `src/theme.rs` defines the palettes; `src/ui/render.rs` handles presentation.
+`src/ui/mouse.rs` handles pointer input and the controls registered during rendering.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
+The tmux check uses a temporary socket, configuration, and investigation. It
+sends mouse input through a real tmux client into a split pane and verifies
+selection, scrolling, inspection, tab switching, resizing, and terminal cleanup.
 
 ## Performance and current boundaries
 
