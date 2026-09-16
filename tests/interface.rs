@@ -376,6 +376,130 @@ fn bookmark_markers_follow_exact_events_and_update_after_reassignment_and_deleti
 }
 
 #[test]
+fn adding_an_exclusion_keeps_the_selected_event_when_earlier_rows_disappear() {
+    let mut app = app();
+    app.top = 20;
+    app.session.views[0].selected = 8;
+    // Equal timestamps must still preserve the exact source record.
+    for row in &mut app.rows[20..30] {
+        row.key.epoch = 1_600_000_020;
+    }
+    let focus = app.rows[28].key;
+    let top = app.rows[20].key;
+    let filtered = app.rows[20..]
+        .iter()
+        .filter(|row| ![21, 24, 27].contains(&row.key.record))
+        .cloned()
+        .collect();
+    key(&mut app, KeyCode::F(5));
+    key(&mut app, KeyCode::F(2));
+    for character in "file-(21|24|27)$".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    let actions = key(&mut app, KeyCode::Enter);
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        filtered,
+    ));
+    assert_eq!(app.rows[app.top].key, top);
+    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+}
+
+#[test]
+fn excluding_the_selected_event_moves_to_the_next_remaining_event() {
+    let mut app = app();
+    app.top = 20;
+    app.session.views[0].selected = 8;
+    for row in &mut app.rows[20..=28] {
+        row.path = "/noise".into();
+    }
+    let next = app.rows[29].key;
+    let filtered = app.rows[29..].to_vec();
+    let actions = key(&mut app, KeyCode::Char('x'));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        filtered,
+    ));
+    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, next);
+}
+
+#[test]
+fn excluding_all_events_and_undoing_keeps_a_selection_below_the_top_row() {
+    let mut app = app();
+    app.top = 20;
+    app.session.views[0].selected = 8;
+    let focus = app.rows[28].key;
+    let restored = app.rows[28..].to_vec();
+    let actions = key(&mut app, KeyCode::Char('X'));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    let actions = app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        vec![],
+    ));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        vec![],
+    ));
+    let actions = key(&mut app, KeyCode::Char('u'));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    assert_eq!(request.anchor, Some(focus));
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        restored,
+    ));
+    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+}
+
+#[test]
+fn removing_an_exclusion_seeks_the_selected_event_if_it_is_beyond_the_new_page() {
+    let mut app = app();
+    app.rows[21].key.epoch += 1000;
+    app.top = 20;
+    app.session.views[0].selected = 1;
+    app.session.views[0].predicate.exclude = vec!["noise".into()];
+    let focus = app.rows[21].key;
+    let focused = app.rows[21].clone();
+    let actions = key(&mut app, KeyCode::Char('u'));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!()
+    };
+    let inserted = (0..request.limit)
+        .map(|index| {
+            let mut row = app.rows[20].clone();
+            row.key.epoch += index as i64;
+            row
+        })
+        .collect();
+    let actions = app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        inserted,
+    ));
+    let [Action::Page(request)] = actions.as_slice() else {
+        panic!("Expected a seek to the event being inspected")
+    };
+    assert_eq!(request.anchor, Some(focus));
+    assert!(!request.reverse);
+    app.message(timeliner_tui::worker::Message::Page(
+        request.generation,
+        vec![focused],
+    ));
+    assert_eq!(app.rows[app.top + app.session.views[0].selected].key, focus);
+}
+
+#[test]
 fn exclusion_edits_compose_while_loading_and_undo_preserves_the_position() {
     let mut app = app();
     app.top = 20;

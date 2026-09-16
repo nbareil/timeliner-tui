@@ -1,0 +1,61 @@
+Before adding ^/noise$ (bookmark p identifies the selected event):
+  ◆ TIMELINER        Tab 1/9  1–9 select · gt/gT switch                                                                              F11  Light
+   ● 1 Tab 1   2 Tab 2   3 Tab 3   4 Tab 4   5 Tab 5   6 Tab 6   7 Tab 7   8 Tab 8   9 Tab 9
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                            ASSESSMENT
+  2020-09-13 12:26:46 sample.body                macb /keep/item-20
+  2020-09-13 12:26:47 sample.body                macb /noise
+  2020-09-13 12:26:47 sample.body                macb /keep/item-22
+  2020-09-13 12:26:47 sample.body                macb /keep/item-23
+  2020-09-13 12:26:48 sample.body                macb /noise
+  2020-09-13 12:26:48 sample.body                macb /keep/item-25
+  2020-09-13 12:26:48 sample.body                macb /keep/item-26
+  2020-09-13 12:26:49 sample.body                macb /noise
+● 2020-09-13 12:26:49 sample.body                macb /keep/item-28
+  2020-09-13 12:26:49 sample.body                macb /keep/item-29
+  2020-09-13 12:26:50 sample.body                macb /noise
+  2020-09-13 12:26:50 sample.body                macb /keep/item-31
+  2020-09-13 12:26:50 sample.body                macb /keep/item-32
+  2020-09-13 12:26:51 sample.body                macb /noise
+  2020-09-13 12:26:51 sample.body                macb /keep/item-34
+  2020-09-13 12:26:51 sample.body                macb /keep/item-35
+  2020-09-13 12:26:52 sample.body                macb /noise
+  2020-09-13 12:26:52 sample.body                macb /keep/item-37
+  2020-09-13 12:26:52 sample.body                macb /keep/item-38
+  2020-09-13 12:26:53 sample.body                macb /noise
+  2020-09-13 12:26:53 sample.body                macb /keep/item-40
+  ● Mark p set
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect   gt/gT tabs   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     F10  Quit
+
+After adding ^/noise$ (same selected event, fewer preceding rows):
+  ◆ TIMELINER        Tab 1/9  1–9 select · gt/gT switch                                                                              F11  Light
+   ● 1 Tab 1   2 Tab 2   3 Tab 3   4 Tab 4   5 Tab 5   6 Tab 6   7 Tab 7   8 Tab 8   9 Tab 9
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   1 exclusions   F5 edit
+  TIMESTAMP           HOST                       MACB PATH                                                                            ASSESSMENT
+  2020-09-13 12:26:46 sample.body                macb /keep/item-20
+  2020-09-13 12:26:47 sample.body                macb /keep/item-22
+  2020-09-13 12:26:47 sample.body                macb /keep/item-23
+  2020-09-13 12:26:48 sample.body                macb /keep/item-25
+  2020-09-13 12:26:48 sample.body                macb /keep/item-26
+● 2020-09-13 12:26:49 sample.body                macb /keep/item-28
+  2020-09-13 12:26:49 sample.body                macb /keep/item-29
+  2020-09-13 12:26:50 sample.body                macb /keep/item-31
+  2020-09-13 12:26:50 sample.body                macb /keep/item-32
+  2020-09-13 12:26:51 sample.body                macb /keep/item-34
+  2020-09-13 12:26:51 sample.body                macb /keep/item-35
+  2020-09-13 12:26:52 sample.body                macb /keep/item-37
+  2020-09-13 12:26:52 sample.body                macb /keep/item-38
+  2020-09-13 12:26:53 sample.body                macb /keep/item-40
+  2020-09-13 12:26:53 sample.body                macb /keep/item-41
+  2020-09-13 12:26:54 sample.body                macb /keep/item-43
+  2020-09-13 12:26:54 sample.body                macb /keep/item-44
+  2020-09-13 12:26:55 sample.body                macb /keep/item-46
+  2020-09-13 12:26:55 sample.body                macb /keep/item-47
+  2020-09-13 12:26:56 sample.body                macb /keep/item-49
+  2020-09-13 12:26:56 sample.body                macb /keep/item-50
+  ● Mark p set
+  ↑↓ scroll   j/k select   TAB tag   ENTER inspect   gt/gT tabs   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     F10  Quit

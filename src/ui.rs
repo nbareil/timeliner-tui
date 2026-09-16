@@ -77,6 +77,8 @@ State is saved automatically. Sources are never modified.";
 #[derive(Clone, Copy)]
 enum Load {
     Replace,
+    Filter(Option<EventKey>),
+    FilterLast(Option<EventKey>),
     Before(usize),
     After(usize),
     Last,
@@ -173,8 +175,10 @@ impl App {
     }
     fn reload_filters(&mut self, mut view: View) -> Action {
         let anchor = self.rows.get(self.top).map(|row| row.key).or(view.top);
+        let focus = self.selected().map(|row| row.key).or(view.top);
         view.top = anchor;
-        self.load(Load::Replace, Some(view), anchor, true)
+        view.selected = self.view().selected;
+        self.load(Load::Filter(focus), Some(view), anchor, true)
     }
     fn selected(&self) -> Option<&Row> {
         self.rows.get(self.top + self.view().selected)
@@ -206,7 +210,7 @@ impl App {
             generation: self.generation,
             view: candidate.unwrap_or_else(|| self.view().clone()),
             anchor,
-            reverse: matches!(mode, Load::Before(_) | Load::Last),
+            reverse: matches!(mode, Load::Before(_) | Load::Last | Load::FilterLast(_)),
             inclusive,
             limit,
         })
@@ -335,24 +339,59 @@ impl App {
                     }
                     self.view_mut().selected = 0;
                 }
-                if rows.is_empty() && anchor.is_some() && matches!(mode, Load::Replace) {
-                    return vec![self.load(Load::Last, candidate, anchor, false)];
+                if rows.is_empty() && anchor.is_some() {
+                    let backward = match mode {
+                        Load::Replace => Some(Load::Last),
+                        Load::Filter(focus) => Some(Load::FilterLast(focus)),
+                        _ => None,
+                    };
+                    if let Some(mode) = backward {
+                        return vec![self.load(mode, candidate, anchor, false)];
+                    }
+                }
+                if let Load::Filter(Some(focus)) = mode
+                    && rows.len() == limit
+                    && rows.last().is_some_and(|row| row.key < focus)
+                {
+                    // Removing exclusions can insert more than a page before the
+                    // selection. Seek directly to its key instead of losing it.
+                    return vec![self.load(mode, candidate, Some(focus), true)];
                 }
                 match mode {
-                    Load::Replace | Load::Last | Load::Mark(_, _) => {
+                    Load::Replace
+                    | Load::Filter(_)
+                    | Load::FilterLast(_)
+                    | Load::Last
+                    | Load::Mark(_, _) => {
                         if let Some(view) = candidate {
                             *self.view_mut() = view;
                         }
-                        self.end_before = (anchor.is_none() && matches!(mode, Load::Replace))
-                            || (matches!(mode, Load::Last) && rows.len() < limit);
-                        self.end_after = rows.len() < limit || matches!(mode, Load::Last);
+                        let last = matches!(mode, Load::Last | Load::FilterLast(_));
+                        self.end_before = (anchor.is_none()
+                            && matches!(mode, Load::Replace | Load::Filter(_)))
+                            || (last && rows.len() < limit);
+                        self.end_after = rows.len() < limit || last;
                         self.rows = rows;
-                        self.top = if matches!(mode, Load::Last) {
+                        self.top = if last {
                             self.rows.len().saturating_sub(self.height)
                         } else {
                             0
                         };
-                        if matches!(mode, Load::Last) {
+                        if let Load::Filter(Some(focus)) | Load::FilterLast(Some(focus)) = mode {
+                            if self.rows.is_empty() {
+                                // Keep the event's key so undo can return here,
+                                // even though there is no visible row to remember.
+                                self.view_mut().top = Some(focus);
+                            } else {
+                                let index = self
+                                    .rows
+                                    .partition_point(|row| row.key < focus)
+                                    .min(self.rows.len() - 1);
+                                let slot = self.view().selected.min(self.height.saturating_sub(1));
+                                self.top = index.saturating_sub(slot);
+                                self.view_mut().selected = index - self.top;
+                            }
+                        } else if last {
                             self.view_mut().selected = self
                                 .height
                                 .saturating_sub(1)

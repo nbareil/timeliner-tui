@@ -150,6 +150,10 @@ selected timeframe. Adding or removing one does not build a full filtered
 database. Use `x` or `X` to exclude a pathname or directory, `u` to undo the most
 recent exclusion, or F5 to edit individual patterns.
 
+Filter changes keep the selected event in view. If it is excluded, the highlight
+moves to the next remaining event, or the preceding event at the end of the
+timeline. Undo also restores your place after a filter produces no matches.
+
 Searches run in the background and Escape cancels them. A very restrictive
 filter can still require searching much of the selected timeframe to fill a
 page or establish that there are no matches. Tag views reuse a separate tag
