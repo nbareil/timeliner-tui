@@ -118,8 +118,9 @@ hidden tabs; the active tab stays visible.
 Use `ma` to set bookmark `a`, `'a` to jump to it, and `''` to return after a jump.
 Bookmarked events show a `●` in the left margin, including on the selected row.
 Marks `a` through `z` persist. If the current filters hide a bookmarked event, a
-new unfiltered tab reveals it. In F8, press `d` followed by a letter to delete a
-mark. Text registers and yank commands are not implemented.
+new unfiltered tab reveals it. Press `d` followed by the bookmark's letter (for
+example, `da`) to delete it from the timeline or the F8 list. Escape cancels a
+pending shortcut. Text registers and yank commands are not implemented.
 
 ## Time and path filters
 

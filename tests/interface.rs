@@ -287,6 +287,51 @@ fn bookmarks_and_return_jump() {
     assert_eq!(app.session.bookmarks[0].key.record, 0);
 }
 #[test]
+fn delete_bookmark_shortcut_works_in_the_timeline_and_bookmark_dialog() {
+    for in_dialog in [false, true] {
+        let mut app = app();
+        for name in ['a', 'b', 'd', 'z'] {
+            key(&mut app, KeyCode::Char('m'));
+            key(&mut app, KeyCode::Char(name));
+        }
+        if in_dialog {
+            key(&mut app, KeyCode::F(8));
+        }
+        for name in ['a', 'd', 'z'] {
+            key(&mut app, KeyCode::Char('d'));
+            assert!(app.status.contains("Delete bookmark"));
+            key(&mut app, KeyCode::Char(name));
+            assert!(!app.session.bookmarks.iter().any(|mark| mark.name == name));
+            assert!(app.session.bookmarks.iter().any(|mark| mark.name == 'b'));
+            assert_eq!(app.status, format!("Mark {name} deleted"));
+        }
+        key(&mut app, KeyCode::Char('d'));
+        key(&mut app, KeyCode::Char('a'));
+        assert_eq!(app.status, "Mark a is not set");
+        assert_eq!(app.session.bookmarks.len(), 1);
+    }
+}
+
+#[test]
+fn escape_cancels_bookmark_deletion_in_the_timeline_and_bookmark_dialog() {
+    for in_dialog in [false, true] {
+        let mut app = app();
+        key(&mut app, KeyCode::Char('m'));
+        key(&mut app, KeyCode::Char('a'));
+        if in_dialog {
+            key(&mut app, KeyCode::F(8));
+        }
+        key(&mut app, KeyCode::Char('d'));
+        key(&mut app, KeyCode::Esc);
+        key(&mut app, KeyCode::Char('a'));
+        assert_eq!(app.session.bookmarks.len(), 1);
+        key(&mut app, KeyCode::Char('d'));
+        key(&mut app, KeyCode::Char('a'));
+        assert!(app.session.bookmarks.is_empty());
+    }
+}
+
+#[test]
 fn bookmark_markers_follow_exact_events_and_update_after_reassignment_and_deletion() {
     for theme in [
         timeliner_tui::theme::Theme::Light,

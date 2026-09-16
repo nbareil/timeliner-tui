@@ -30,6 +30,8 @@ use std::{
 
 mod render;
 
+const DELETE_MARK_PROMPT: &str = "Delete bookmark: type a–z (Esc cancels)";
+
 const HELP: &str = "\
 TIMELINER TUI
 
@@ -50,7 +52,7 @@ F7 also offers rename/close. F6 copies filters and location.
 ma sets mark a; 'a jumps to it; '' returns after a jump.
 ● in the left margin marks a bookmarked event.
 If a mark is hidden, a new unfiltered view reveals it.
-F8 lists marks; d then a letter deletes a mark in that dialog.
+F8 lists marks. da deletes mark a from the timeline or F8.
 No Vim text registers are implemented.
 
 x excludes the selected pathname; X excludes its directory subtree.
@@ -258,6 +260,16 @@ impl App {
         }
         self.remember();
         None
+    }
+    fn mark_delete(&mut self, name: char) {
+        let count = self.session.bookmarks.len();
+        self.session.bookmarks.retain(|mark| mark.name != name);
+        if self.session.bookmarks.len() < count {
+            self.dirty_session = true;
+            self.status = format!("Mark {name} deleted");
+        } else {
+            self.status = format!("Mark {name} is not set");
+        }
     }
     fn mark_jump(&mut self, name: char) -> Vec<Action> {
         let Some(mark) = self
@@ -586,13 +598,15 @@ impl App {
             };
         }
         if key.code == KeyCode::Esc {
+            if self.prefix.take().is_some() {
+                self.status = "Cancelled".into();
+            }
             if self.modal.take().is_none() {
                 self.pending = None;
                 self.status = "Cancelled".into();
                 self.generation += 1;
                 return vec![Action::Cancel];
             }
-            self.prefix = None;
             return vec![];
         }
         if key.code == KeyCode::F(11) && self.ready {
@@ -718,16 +732,19 @@ impl App {
                     _ => self.modal = Some(Modal::Views),
                 },
                 Modal::Marks => {
-                    if self.prefix == Some('d') {
-                        if let KeyCode::Char(name) = key.code {
-                            self.session.bookmarks.retain(|m| m.name != name);
-                            self.dirty_session = true;
+                    let deleting = self.prefix.take() == Some('d');
+                    if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
+                        match (deleting, key.code) {
+                            (true, KeyCode::Char(name @ 'a'..='z')) => self.mark_delete(name),
+                            (false, KeyCode::Char('d')) => {
+                                self.prefix = Some('d');
+                                self.status = DELETE_MARK_PROMPT.into();
+                            }
+                            (false, KeyCode::Char(name @ 'a'..='z')) => {
+                                return self.mark_jump(name);
+                            }
+                            _ => {}
                         }
-                        self.prefix = None;
-                    } else if key.code == KeyCode::Char('d') {
-                        self.prefix = Some('d');
-                    } else if let KeyCode::Char(name @ 'a'..='z') = key.code {
-                        return self.mark_jump(name);
                     }
                     self.modal = Some(Modal::Marks);
                 }
@@ -764,6 +781,12 @@ impl App {
                     }
                     return vec![];
                 }
+                ('d', KeyCode::Char(name @ 'a'..='z'))
+                    if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() =>
+                {
+                    self.mark_delete(name);
+                    return vec![];
+                }
                 ('\'', KeyCode::Char('\'')) => {
                     if let Some((index, view)) = self.previous.take() {
                         self.previous = Some((self.session.active, self.view().clone()));
@@ -796,6 +819,10 @@ impl App {
                     self.prefix = Some(c);
                     self.status = format!("{c}…");
                 }
+            }
+            KeyCode::Char('d') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
+                self.prefix = Some('d');
+                self.status = DELETE_MARK_PROMPT.into();
             }
             KeyCode::Char('G') => return vec![self.load(Load::Last, None, None, true)],
             KeyCode::Up => return self.scroll(-1).into_iter().collect(),

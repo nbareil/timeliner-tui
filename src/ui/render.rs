@@ -557,13 +557,15 @@ impl App {
                 frame.render_widget(Paragraph::new(lines).style(p.base().bg(p.surface)), content);
             }
             Modal::Marks => {
-                let mut lines = vec![
-                    Line::from(label(
-                        "ma … mz sets a mark. Type its letter to jump; d + letter deletes.",
+                let hint = if self.prefix == Some('d') {
+                    label(DELETE_MARK_PROMPT, p.accent)
+                } else {
+                    label(
+                        "Type a letter to jump; d + letter deletes. Set marks in the timeline.",
                         p.muted,
-                    )),
-                    Line::from(""),
-                ];
+                    )
+                };
+                let mut lines = vec![Line::from(hint), Line::from("")];
                 if self.session.bookmarks.is_empty() {
                     lines.push(Line::from(label(
                         "No bookmarks yet. Close this dialog and press ma to set one.",
