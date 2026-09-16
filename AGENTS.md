@@ -28,6 +28,10 @@ No test framework or coverage threshold is configured. Introduce a framework app
 
 ## Commit and pull request guidelines
 
+After completing a request, run the applicable validation and commit the changes
+automatically. Do not wait for a separate commit request or ask for additional
+commit confirmation. Keep commits focused and exclude unrelated pending changes.
+
 The repository has no commit history, so no established message convention can be inferred. Use short, imperative subjects, such as `Add initial application scaffold`, and keep each commit focused.
 
 Pull requests should explain the change, link relevant issues, and report validation commands and results. If checks cannot run, explain why. Include a terminal capture or screenshot for visible interface changes.
