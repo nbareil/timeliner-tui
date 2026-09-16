@@ -998,6 +998,7 @@ fn detail_values_and_iso_timestamps_start_in_the_same_column() {
     let fields = [
         ("Host", "sample-host"),
         ("Hash / original first field", "original-hash"),
+        ("Size", "48.22 KB"),
         ("Access time", "2026-09-08T09:14:19+00:00"),
         ("Modification time", "2026-09-08T09:14:20+00:00"),
         ("Change time", "2026-09-08T09:14:22+00:00"),

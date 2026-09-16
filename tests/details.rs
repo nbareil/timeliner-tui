@@ -71,8 +71,36 @@ fn detail_timestamps_use_iso_dates_and_the_requested_timezone_without_saving() {
         assert!(new_york.contains(expected), "{new_york}");
     }
     for text in [utc, new_york] {
-        assert!(text.contains("Size: 10\n"));
+        assert!(text.contains("Size: 10 B\n"));
         assert!(text.ends_with(original));
+    }
+}
+
+#[test]
+fn detail_sizes_use_readable_decimal_units_and_preserve_original_records() {
+    for (size, expected) in [
+        (0, "0 B"),
+        (1, "1 B"),
+        (999, "999 B"),
+        (1000, "1.00 KB"),
+        (1500, "1.50 KB"),
+        (48216, "48.22 KB"),
+        (1_000_000, "1.00 MB"),
+        (1_500_000, "1.50 MB"),
+        (1_000_000_000, "1.00 GB"),
+        (1_500_000_000, "1.50 GB"),
+        (1_000_000_000_000, "1.00 TB"),
+        (1_000_000_000_000_000, "1.00 PB"),
+        (1_000_000_000_000_000_000, "1.00 EB"),
+        (u64::MAX, "18.45 EB"),
+    ] {
+        let original = format!("0|/sample|1|mode|0|0|{size}|1|2|3|4\n");
+        let (_dir, workers) = start(&original);
+        let text = details(&workers, chrono_tz::UTC);
+        workers.shutdown();
+
+        assert!(text.contains(&format!("Size: {expected}\n")), "{text}");
+        assert!(text.ends_with(&original));
     }
 }
 

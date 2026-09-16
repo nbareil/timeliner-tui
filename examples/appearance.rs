@@ -107,7 +107,7 @@ fn main() {
     match args.get(1).map(String::as_str) {
         Some("details") => {
             app.message(Message::Detail(
-                "Host: app-04\nSource #4: /case/uac-app-04/bodyfile/bodyfile.txt\nLine: 18423  Byte offset: 2791240\nTag: MALICIOUS (manual)\nIOC rules: [3]\n\nHash / original first field: 0\nPath: /tmp/.cache/systemd-netd\nInode: 39182\nMode: -rwxr-xr-x\nUID: 0\nGID: 0\nSize: 48216\nAccess time: 2026-09-08T09:14:19+00:00\nModification time: 2026-09-08T09:14:19+00:00\nChange time: 2026-09-08T09:14:22+00:00\nBirth time: 2026-09-08T09:14:17+00:00\n\nOriginal record (display escaped; export preserves bytes):\n0|/tmp/.cache/systemd-netd|39182|-rwxr-xr-x|0|0|48216|1788858859|1788858859|1788858862|1788858857".into()
+                "Host: app-04\nSource #4: /case/uac-app-04/bodyfile/bodyfile.txt\nLine: 18423  Byte offset: 2791240\nTag: MALICIOUS (manual)\nIOC rules: [3]\n\nHash / original first field: 0\nPath: /tmp/.cache/systemd-netd\nInode: 39182\nMode: -rwxr-xr-x\nUID: 0\nGID: 0\nSize: 48.22 KB\nAccess time: 2026-09-08T09:14:19+00:00\nModification time: 2026-09-08T09:14:19+00:00\nChange time: 2026-09-08T09:14:22+00:00\nBirth time: 2026-09-08T09:14:17+00:00\n\nOriginal record (display escaped; export preserves bytes):\n0|/tmp/.cache/systemd-netd|39182|-rwxr-xr-x|0|0|48216|1788858859|1788858859|1788858862|1788858857".into()
             ));
         }
         Some("filters") => {

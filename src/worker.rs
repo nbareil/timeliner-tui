@@ -61,6 +61,22 @@ pub struct Workers {
     handles: Vec<thread::JoinHandle<()>>,
 }
 
+fn format_file_size(bytes: u64) -> String {
+    if bytes < 1000 {
+        return format!("{bytes} B");
+    }
+    let mut size = bytes as f64;
+    let mut unit = "B";
+    for next_unit in ["KB", "MB", "GB", "TB", "PB", "EB"] {
+        size /= 1000.0;
+        unit = next_unit;
+        if size < 1000.0 {
+            break;
+        }
+    }
+    format!("{size:.2} {unit}")
+}
+
 impl Workers {
     pub fn start(
         root: PathBuf,
@@ -181,7 +197,9 @@ impl Workers {
                                 for (index, (label, value)) in
                                     labels.iter().zip(&detail.record.fields).enumerate()
                                 {
-                                    let value = if index >= 7 {
+                                    let value = if index == 6 {
+                                        format_file_size(value.parse::<u64>()?)
+                                    } else if index >= 7 {
                                         let epoch = detail.record.times[index - 7];
                                         timezone
                                             .timestamp_opt(epoch, 0)
