@@ -94,6 +94,7 @@ fn main() {
                 automatic: i == 5 || i == 15,
                 ioc_match: matches!(i, 5 | 7 | 15),
                 is_directory: false,
+                zero_size: false,
             })
         })
         .collect();
@@ -108,6 +109,24 @@ fn main() {
         },
     ];
     match args.get(1).map(String::as_str) {
+        Some("zero-size") => {
+            for (index, path, is_directory) in [
+                (0, "/var/log/empty.log", false),
+                (2, r"C:\Temp\empty.txt", false),
+                (3, "/tmp/empty.sh", false),
+                (4, "/proc/zero-size-directory", true),
+                (
+                    7,
+                    "/var/lib/application/a-very-long-directory-name/with-more-components/than-fit-in-the-path-column",
+                    true,
+                ),
+            ] {
+                let row = app.rows[index].event_mut().unwrap();
+                row.path = path.into();
+                row.is_directory = is_directory;
+                row.zero_size = true;
+            }
+        }
         Some("directories") => {
             for (index, path) in [
                 (0, "/etc/ssh"),

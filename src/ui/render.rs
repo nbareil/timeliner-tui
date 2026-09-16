@@ -380,6 +380,16 @@ impl App {
                 })
                 .collect::<Vec<_>>();
             frame.render_widget(Paragraph::new(Line::from(flags)).style(base), cells[3]);
+            let mut path_area = cells[4];
+            if row.zero_size {
+                let width = path_area.width.min(6);
+                frame.render_widget(
+                    Paragraph::new("[0 B]").style(base.fg(p.teal).add_modifier(Modifier::BOLD)),
+                    Rect::new(path_area.x, path_area.y, width, 1),
+                );
+                path_area.x += width;
+                path_area.width -= width;
+            }
             let path = display_text(&display_path(&row.path, row.is_directory));
             let basename_path = if row.is_directory {
                 path.trim_end_matches(['/', '\\'])
@@ -402,14 +412,14 @@ impl App {
                     Span::styled(path[split..].to_string(), path_style),
                 ]))
                 .style(base),
-                cells[4],
+                path_area,
             );
             if row.is_directory
-                && Line::from(path.as_str()).width() > cells[4].width as usize
-                && cells[4].width > 0
+                && Line::from(path.as_str()).width() > path_area.width as usize
+                && path_area.width > 0
             {
                 let marker = path.chars().next_back().unwrap_or('/');
-                let width = cells[4].width.min(2);
+                let width = path_area.width.min(2);
                 frame.render_widget(
                     Paragraph::new(if width == 1 {
                         marker.to_string()
@@ -417,7 +427,7 @@ impl App {
                         format!("…{marker}")
                     })
                     .style(base.patch(path_style)),
-                    Rect::new(cells[4].right() - width, cells[4].y, width, 1),
+                    Rect::new(path_area.right() - width, path_area.y, width, 1),
                 );
             }
             if row.tag != Tag::None {

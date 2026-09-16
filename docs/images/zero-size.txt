@@ -1,0 +1,36 @@
+  ◆ TIMELINER        Tab 1/4  1–9 select · gt/gT switch                                                            F10  Mouse on      F11  Dark
+   ● 1 All activity   2 IOC review   3 Authentication   4 Tagged
+  TIME  2026-09-08 08:10:00  →  2026-09-09 09:10:00   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+   TIMESTAMP           HOST                       MACB PATH                                                                           ASSESSMENT
+   2026-09-08 09:10:00 web-01                     m··· [0 B] /var/log/empty.log
+   2026-09-08 09:10:37 db-01                      ·a·· /var/log/auth.log
+   2026-09-08 09:11:14 edge-02                    m·c· [0 B] C:\Temp\empty.txt
+●  2026-09-08 09:11:51 app-04                     ··cb [0 B] /tmp/empty.sh                                                            SUSPICIOUS
+   2026-09-08 09:12:28 web-01                     macb [0 B] /proc/zero-size-directory/
+   2026-09-08 09:13:05 db-01                      m··· /etc/systemd/system/backup.service                                                    IOC
+   2026-09-08 09:13:42 edge-02                    ·a·· /var/spool/cron/crontabs/root
+●  2026-09-08 09:14:19 app-04                     m·c· [0 B] /var/lib/application/a-very-long-directory-name/with-more-components/t…/  MALICIOUS
+   2026-09-08 09:14:56 web-01                     ··cb /usr/local/bin/healthcheck
+   2026-09-08 09:15:33 db-01                      macb /var/log/audit/audit.log
+   2026-09-08 09:16:10 edge-02                    m··· /etc/passwd
+   2026-09-08 09:16:47 app-04                     ·a·· /etc/sudoers.d/deploy
+   2026-09-08 09:17:24 web-01                     m·c· /opt/application/config/production.yaml
+   2026-09-08 09:18:01 db-01                      ··cb /var/lib/postgresql/data/pg_hba.conf
+   2026-09-08 09:18:38 edge-02                    macb /home/deploy/.bash_history                                                     SUSPICIOUS
+   2026-09-08 09:19:15 app-04                     m··· /etc/cron.d/daily-maintenance                                                         IOC
+   2026-09-08 09:19:52 web-01                     ·a·· /run/user/1000/session.lock
+   2026-09-08 09:20:29 db-01                      m·c· /var/log/journal/system.journal
+   2026-09-08 09:21:06 edge-02                    ··cb /etc/resolv.conf
+   2026-09-08 09:21:43 app-04                     macb /usr/lib/systemd/system/ssh.service
+   2026-09-08 09:22:20 web-01                     m··· /var/www/html/index.html
+   2026-09-08 09:22:57 db-01                      ·a·· /opt/application/logs/worker.log
+   2026-09-08 09:23:34 edge-02                    m·c· /usr/bin/curl
+   2026-09-08 09:24:11 app-04                     ··cb /etc/ssl/certs/ca-certificates.crt
+   2026-09-08 09:24:48 web-01                     macb /home/deploy/.config/environment
+   2026-09-08 09:25:25 db-01                      m··· /var/log/syslog
+   2026-09-08 09:26:02 edge-02                    ·a·· /opt/application/releases/current
+   2026-09-08 09:26:39 app-04                     m·c· /etc/hosts
+  ● Ready · 4 collections indexed
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help      F2  Tags       F3  Detail    F4  Time       F5  Filter    F6  Fork      F7  Views      F8  Marks     F9  Export     q  Quit

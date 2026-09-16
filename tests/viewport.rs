@@ -26,6 +26,7 @@ fn rows(ids: Range<i64>) -> Vec<DisplayRow> {
             automatic: false,
             ioc_match: false,
             is_directory: false,
+            zero_size: false,
         })
     })
     .collect()

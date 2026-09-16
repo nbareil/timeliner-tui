@@ -34,6 +34,7 @@ fn app() -> App {
                 automatic: true,
                 ioc_match: false,
                 is_directory: false,
+                zero_size: false,
             })
         })
         .collect();

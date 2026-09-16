@@ -80,6 +80,12 @@ exports use the original pathname. Existing investigations read mode information
 from the original record when it is missing from the index.
 See the [directory-row terminal capture](docs/images/directories.txt).
 
+Entries whose bodyfile size field is zero show a teal `[0 B]` badge before the
+pathname, including directories. The badge remains visible when a long path is
+clipped. Existing investigations read missing size metadata from the original
+record. See the
+[zero-size terminal capture](docs/images/zero-size.txt).
+
 | Key | Action |
 | --- | --- |
 | ↑ / ↓ | Scroll one row, keeping the same event selected while it is visible |
@@ -495,7 +501,8 @@ or fold summaries; raw queries and exports continue to use `src/query.rs`.
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, or `goto`
-to preview dialogs, or `selection` and `directories` to preview timeline markers.
+to preview dialogs, or `selection`, `directories`, and `zero-size` to preview
+timeline markers.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It

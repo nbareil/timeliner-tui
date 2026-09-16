@@ -192,6 +192,7 @@ mod tests {
                         automatic: false,
                         ioc_match: false,
                         is_directory: false,
+                        zero_size: false,
                     })
                 })
                 .collect(),

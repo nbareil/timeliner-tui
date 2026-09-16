@@ -27,6 +27,7 @@ fn app() -> App {
                 automatic: false,
                 ioc_match: false,
                 is_directory: false,
+                zero_size: false,
             })
         })
         .collect();
@@ -997,6 +998,7 @@ fn jumping_to_end_keeps_backward_pagination_available() {
                 automatic: true,
                 ioc_match: false,
                 is_directory: false,
+                zero_size: false,
             })
         })
         .collect();
@@ -1061,6 +1063,7 @@ fn errors_from_old_queries_do_not_discard_newer_results() {
         automatic: true,
         ioc_match: false,
         is_directory: false,
+        zero_size: false,
     });
     app.message(timeliner_tui::worker::Message::Page(
         new.generation,

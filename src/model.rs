@@ -98,6 +98,7 @@ pub struct Row {
     pub automatic: bool,
     pub ioc_match: bool,
     pub is_directory: bool,
+    pub zero_size: bool,
 }
 
 /// Add a visual directory marker while preserving the indexed evidence pathname.

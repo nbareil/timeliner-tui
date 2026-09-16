@@ -78,4 +78,8 @@ impl Record {
             || u32::from_str_radix(mode.strip_prefix("0o").unwrap_or(mode), 8)
                 .is_ok_and(|bits| bits & 0o170000 == 0o040000)
     }
+
+    pub fn is_zero_size(&self) -> bool {
+        self.fields[6].parse::<u64>() == Ok(0)
+    }
 }

@@ -23,6 +23,7 @@ fn rows(start: i64, count: usize) -> Vec<DisplayRow> {
                 automatic: false,
                 ioc_match: false,
                 is_directory: false,
+                zero_size: false,
             })
         })
         .collect()
