@@ -171,6 +171,18 @@ impl Workers {
                 if let Some(theme) = theme {
                     session.theme = theme;
                 }
+                let cancel = Cancellation {
+                    clock: job_clock.clone(),
+                    generation: job_clock.load(Ordering::Relaxed),
+                };
+                for view in &mut session.views {
+                    burst::restore(&store, view, &cancel, |count| {
+                        let _ = tx.send(Message::Progress(
+                            0,
+                            format!("Restoring collapsed groups: {count} events checked"),
+                        ));
+                    })?;
+                }
                 let warnings = store.source_warnings()?.join(" · ");
                 tx.send(Message::Ready(session, warnings))?;
                 while let Ok(command) = rx.recv() {

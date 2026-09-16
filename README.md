@@ -228,12 +228,18 @@ or **c** on the summary to expand it and return to the event where you requested
 the fold. Bookmark jumps reveal their exact event. Expand a summary before
 tagging or excluding an individual record.
 
-Folds belong to their tab; forking copies them independently. Applying filters
-clears that tab's folds. Tag edits keep unrelated folds closed and update summary
-tag counts, including when another timestamp of a folded record is assessed.
+Folds are saved with their tab and restored when reopening the investigation;
+forking copies them independently. Expanding a group saves its expanded state.
+On reopening, summary counts are refreshed from the current index, including
+newly imported events within the saved interval. Changing the burst threshold
+does not discard saved groups.
+
+Applying filters clears that tab's folds. Tag edits keep unrelated folds closed
+and update summary tag counts, including when another timestamp of a folded
+record is assessed.
 In a tag-filtered view, a fold is cleared only if the edit changes its membership;
 other hosts becoming visible remain outside the fold. Reloading IOC rules clears
-folds across tabs. Folds are temporary and reopen expanded after restarting.
+folds across tabs.
 Exports include folded records according to the normal export filters.
 
 Detection runs in the background; Escape cancels it and keeps the current view.

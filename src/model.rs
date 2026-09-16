@@ -60,8 +60,8 @@ pub struct View {
     pub bogus: bool,
     pub top: Option<EventKey>,
     pub selected: usize,
-    /// Presentation-only folds, retained when tag edits leave membership unchanged.
-    #[serde(skip)]
+    /// Saved folds, retained when tag edits leave membership unchanged.
+    #[serde(default)]
     pub bursts: Vec<Burst>,
 }
 
@@ -108,7 +108,7 @@ pub struct TagChange {
     pub events: Vec<(EventKey, u8)>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Burst {
     pub first: EventKey,
     pub last: EventKey,

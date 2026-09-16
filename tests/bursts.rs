@@ -681,7 +681,7 @@ fn filters_clear_folds_only_after_success_and_folds_are_independent_per_tab() {
 }
 
 #[test]
-fn threshold_is_editable_validated_and_saved_but_folds_are_temporary() {
+fn threshold_is_editable_and_saved_folds_survive_threshold_changes() {
     let fixture = Fixture::new(&[(0, 10, 0)]);
     let origin = fixture.raw(&View::default())[4].key;
     let mut app = loaded(&fixture, origin);
@@ -700,7 +700,7 @@ fn threshold_is_editable_validated_and_saved_but_folds_are_temporary() {
     fixture.store.save_session(&app.session).unwrap();
     let saved = fixture.store.session().unwrap();
     assert_eq!(saved.burst_threshold, 250);
-    assert!(saved.views.iter().all(|view| view.bursts.is_empty()));
+    assert_eq!(saved.views[0].bursts, app.session.views[0].bursts);
     let mut legacy = serde_json::to_value(&saved).unwrap();
     legacy.as_object_mut().unwrap().remove("burst_threshold");
     assert_eq!(
@@ -709,6 +709,152 @@ fn threshold_is_editable_validated_and_saved_but_folds_are_temporary() {
             .burst_threshold,
         100
     );
+}
+
+fn ready_session(workers: &Workers) -> Session {
+    loop {
+        match workers
+            .messages
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+        {
+            Message::Ready(session, _) => return session,
+            Message::Progress(..) => {}
+            Message::Error(error) => panic!("{error}"),
+            _ => panic!("Unexpected message while restoring the workspace"),
+        }
+    }
+}
+
+#[test]
+fn collapsed_groups_survive_restart_and_expansion_stays_saved_per_tab() {
+    let fixture = Fixture::new(&[(0, 8, 0), (1, 9, 0)]);
+    let origin = fixture.raw(&View::default())[4].key;
+    let mut app = loaded(&fixture, origin);
+    fold(&fixture, &mut app);
+    let fork = request(key(&mut app, KeyCode::F(6)));
+    apply_query(&fixture, &mut app, fork);
+    let copy = app.session.active;
+    let expected = app.session.views[copy].bursts.clone();
+    app.session.burst_threshold = 250;
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    ready_session(&workers);
+    workers
+        .commands
+        .send(Command::Save(app.session.clone()))
+        .unwrap();
+    workers.shutdown();
+
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    let session = ready_session(&workers);
+    assert_eq!(session.views[0].bursts, expected);
+    assert_eq!(session.views[copy].bursts, expected);
+    assert_eq!(session.burst_threshold, 250);
+    let mut resumed = App::default();
+    let initial = request(resumed.message(Message::Ready(session, String::new())));
+    apply_query(&fixture, &mut resumed, initial);
+    assert!(matches!(resumed.rows[0], DisplayRow::Burst(_)));
+    let expanded = request(key(&mut resumed, KeyCode::Char('c')));
+    apply_query(&fixture, &mut resumed, expanded);
+    assert_eq!(
+        resumed.rows[resumed.top + resumed.session.views[copy].selected].key(),
+        origin
+    );
+    workers
+        .commands
+        .send(Command::Save(resumed.session))
+        .unwrap();
+    workers.shutdown();
+
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    let session = ready_session(&workers);
+    assert!(session.views[copy].bursts.is_empty());
+    assert_eq!(session.views[0].bursts, expected);
+    workers.shutdown();
+}
+
+#[test]
+fn restored_summaries_refresh_counts_tags_iocs_and_new_interleaved_hosts() {
+    let mut fixture = Fixture::new(&[(0, 8, 0), (1, 9, 0)]);
+    let raw = fixture.raw(&View::default());
+    let mut app = loaded(&fixture, raw[4].key);
+    fold(&fixture, &mut app);
+    fixture.store.save_session(&app.session).unwrap();
+    fixture
+        .store
+        .set_tag(raw[1].key.record, Some(Tag::Malicious))
+        .unwrap();
+    fixture
+        .store
+        .reload_rules(
+            &Rules::from_yaml("- path: /usr/lib/file-0").unwrap(),
+            |_| true,
+        )
+        .unwrap();
+    let added = fixture.dir.path().join("extra.body");
+    fs::write(
+        &added,
+        format!(
+            "host-a|/new-a|1|mode|0|0|1|{BASE}|0|0|0\nhost-b|/new-b|2|mode|0|0|1|{BASE}|0|0|0\n"
+        ),
+    )
+    .unwrap();
+    fixture
+        .store
+        .import(
+            &source::resolve(&added, None, true).unwrap(),
+            &Rules::default(),
+            |_, _| true,
+        )
+        .unwrap();
+    let expected: Vec<_> = fixture
+        .raw(&View::default())
+        .into_iter()
+        .filter(|row| row.host == "host-a")
+        .collect();
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    let session = ready_session(&workers);
+    let summary = &session.views[0].bursts[0];
+    assert_eq!(summary.count, expected.len() as u64);
+    assert_eq!(
+        summary.tagged,
+        expected.iter().filter(|row| row.tag != Tag::None).count() as u64
+    );
+    assert_eq!(
+        summary.ioc_matches,
+        expected.iter().filter(|row| row.ioc_match).count() as u64
+    );
+    assert!(!summary.exclusive);
+    let displayed = fixture.displayed(&session.views[0], false, 128);
+    assert!(displayed.iter().any(|row| row.host() == "host-b"));
+    workers.shutdown();
+}
+
+#[test]
+fn legacy_sessions_load_without_folds_and_restore_is_cancellable() {
+    let fixture = Fixture::new(&[(0, 8, 0)]);
+    let mut app = loaded(&fixture, fixture.raw(&View::default())[0].key);
+    fold(&fixture, &mut app);
+    let mut legacy = serde_json::to_value(&app.session).unwrap();
+    for view in legacy["views"].as_array_mut().unwrap() {
+        view.as_object_mut().unwrap().remove("bursts");
+    }
+    let legacy: Session = serde_json::from_value(legacy).unwrap();
+    assert!(legacy.views.iter().all(|view| view.bursts.is_empty()));
+    let expected = app.session.views[0].bursts.clone();
+    let cancel = Cancellation::never();
+    cancel.clock.fetch_add(1, Ordering::Relaxed);
+    assert!(burst::restore(&fixture.store, &mut app.session.views[0], &cancel, |_| {}).is_err());
+    assert_eq!(app.session.views[0].bursts, expected);
+    app.session.views[0].predicate.include = "^/missing$".into();
+    burst::restore(
+        &fixture.store,
+        &mut app.session.views[0],
+        &Cancellation::never(),
+        |_| {},
+    )
+    .unwrap();
+    assert!(app.session.views[0].bursts.is_empty());
 }
 
 #[test]

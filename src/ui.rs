@@ -96,7 +96,8 @@ c collapses consecutive dense seconds on the selected host, across all paths.
 Each second must exceed the threshold (default 100 events/s). No gaps are bridged.
 C edits the threshold. c or ENTER/F3 on a summary expands it.
 Other hosts remain visible. Tag edits keep unrelated folds closed.
-Filters, IOC rule reloads, and restart reset folds. Bookmark jumps reveal members.
+Collapsed groups are saved per tab and restored after restarting.
+Filters and IOC rule reloads reset folds. Bookmark jumps reveal members.
 Export includes folded records.
 / opens the path filter editor. Exclusions are regular expressions.
 Filters use Rust regex syntax (no lookaround/backreferences).
@@ -334,6 +335,7 @@ impl App {
         })]
     }
     fn tags_changed(&mut self, changes: &[TagChange]) -> Vec<Action> {
+        self.dirty_session = true;
         let mut candidate = self
             .pending
             .as_ref()
@@ -962,6 +964,7 @@ impl App {
             Message::Tagged(change) => self.tags_changed(&[change]),
             Message::TaggedMany(changes) => self.tags_changed(&changes),
             Message::Changed => {
+                self.dirty_session = true;
                 self.selected_records.clear();
                 for view in &mut self.session.views {
                     view.bursts.clear();

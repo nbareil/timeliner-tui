@@ -122,6 +122,7 @@ fn main() -> Result<()> {
         }
         view.top = None;
         view.selected = 0;
+        view.bursts.clear();
         timeliner_tui::model::validate_view(&view)?;
         Some(view)
     } else {

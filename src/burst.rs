@@ -8,6 +8,88 @@ use crate::{
 use anyhow::Result;
 use rusqlite::params;
 
+/// Refresh saved summaries against the current index before displaying them.
+/// Keep the saved time ranges, independently of the threshold for new folds.
+pub fn restore(
+    store: &Store,
+    view: &mut View,
+    cancel: &Cancellation,
+    mut progress: impl FnMut(u64),
+) -> Result<()> {
+    if view.bursts.is_empty() {
+        return Ok(());
+    }
+    validate_view(view)?;
+    cancel.check()?;
+    cancel.install(&store.conn)?;
+    let _reset = ResetCancellation(&store.conn);
+    let matcher = Matcher::new(&view.predicate)?;
+    let mut statement = store.conn.prepare_cached(
+        "SELECT e.epoch,e.record,e.macb,r.host,r.path,r.tag,r.matches!='[]'
+         FROM events e JOIN records r ON r.id=e.record
+         WHERE e.epoch>=? AND e.epoch<=? AND (e.macb & ?) != 0
+         ORDER BY e.epoch,e.record",
+    )?;
+    let mut restored = Vec::with_capacity(view.bursts.len());
+    let mut checked = 0_u64;
+    for saved in &view.bursts {
+        let lo = saved
+            .first
+            .epoch
+            .max(view.after.unwrap_or(i64::MIN))
+            .max(if view.bogus { i64::MIN } else { 1 });
+        let hi = saved.last.epoch.min(view.before.unwrap_or(i64::MAX));
+        let mut summary = saved.clone();
+        summary.count = 0;
+        summary.macb = 0;
+        summary.tagged = 0;
+        summary.ioc_matches = 0;
+        summary.exclusive = true;
+        let mut found_origin = false;
+        let mut rows = statement.query(params![lo, hi, view.time_mask])?;
+        while let Some(row) = rows.next()? {
+            cancel.check()?;
+            checked += 1;
+            if checked.is_multiple_of(1024) {
+                progress(checked);
+            }
+            let host: String = row.get(3)?;
+            let path: String = row.get(4)?;
+            let tag = Tag::from_i64(row.get(5)?);
+            if !matcher.matches(&path, &host, tag) {
+                continue;
+            }
+            if host != saved.host {
+                summary.exclusive = false;
+                continue;
+            }
+            let key = EventKey {
+                epoch: row.get(0)?,
+                record: row.get(1)?,
+            };
+            if summary.count == 0 {
+                summary.first = key;
+            }
+            summary.last = key;
+            summary.count += 1;
+            summary.macb |= row.get::<_, u8>(2)?;
+            summary.tagged += u64::from(tag != Tag::None);
+            summary.ioc_matches += u64::from(row.get::<_, bool>(6)?);
+            found_origin |= key == saved.origin;
+        }
+        if summary.count > 0 {
+            if !found_origin {
+                summary.origin = summary.first;
+            }
+            restored.push(summary);
+        }
+    }
+    progress(checked);
+    cancel.check()?;
+    view.bursts = restored;
+    Ok(())
+}
+
 /// Assessments do not change timestamp density in views without a tag filter.
 /// Repair summary counts there, and invalidate only folds whose own membership
 /// changes in tag-filtered views.
