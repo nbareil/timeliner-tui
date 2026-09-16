@@ -1,5 +1,5 @@
 use crate::{
-    model::{EventKey, Row, View},
+    model::{EventKey, Row, Tag, View},
     query::{self, Cancellation, Page},
     store::Store,
 };
@@ -10,6 +10,7 @@ use chrono_tz::{GapInfo, Tz};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Jump {
     TimeBoundary(i64),
+    TaggedAfter(EventKey),
 }
 
 impl Jump {
@@ -21,16 +22,33 @@ impl Jump {
         cancel: &Cancellation,
         progress: impl FnMut(u64),
     ) -> Result<Option<Row>> {
-        let Self::TimeBoundary(epoch) = self;
-        query::page(
-            store,
-            view,
-            Page {
-                anchor: Some(EventKey {
+        let mut view = view.clone();
+        let (anchor, inclusive) = match self {
+            Self::TimeBoundary(epoch) => (
+                EventKey {
                     epoch,
                     record: i64::MIN,
-                }),
-                inclusive: true,
+                },
+                true,
+            ),
+            Self::TaggedAfter(key) => {
+                // Intersect with the current tag filter rather than broadening it.
+                let tags = view.predicate.tags.get_or_insert_default();
+                if !tags.is_empty() {
+                    tags.retain(|tag| *tag != Tag::None);
+                    if tags.is_empty() {
+                        return Ok(None);
+                    }
+                }
+                (key, false)
+            }
+        };
+        query::page(
+            store,
+            &view,
+            Page {
+                anchor: Some(anchor),
+                inclusive,
                 limit: 1,
                 ..Page::default()
             },

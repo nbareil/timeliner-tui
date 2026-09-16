@@ -1070,3 +1070,158 @@ fn worker_time_jumps_find_the_first_filtered_event_across_a_gap_and_center_it() 
     }
     workers.shutdown();
 }
+
+#[test]
+fn tagged_jumps_advance_within_a_second_and_intersect_current_filters() {
+    let fixture = Fixture::new(&[(0, 14, 2), (60, 3, 0)]);
+    let raw = fixture.raw(&View::default());
+    let host_a: Vec<_> = raw.iter().filter(|row| row.host == "host-a").collect();
+    for (index, tag) in [
+        (0, Tag::Suspicious),
+        (2, Tag::Ioc),
+        (4, Tag::Malicious),
+        (6, Tag::Suspicious),
+        (14, Tag::Ioc),
+    ] {
+        fixture
+            .store
+            .set_tag(host_a[index].key.record, Some(tag))
+            .unwrap();
+    }
+    let find = |index: usize, view: &View| {
+        Jump::TaggedAfter(host_a[index].key)
+            .find(&fixture.store, view, &Cancellation::never(), |_| {})
+            .unwrap()
+            .map(|row| row.key)
+    };
+    let view = View::default();
+    for (origin, next) in [(0, 2), (2, 4), (4, 6), (6, 14)] {
+        assert_eq!(find(origin, &view), Some(host_a[next].key));
+    }
+    assert_eq!(find(14, &view), None);
+    assert!(view.predicate.tags.is_none());
+
+    for tags in [
+        None,
+        Some(vec![]),
+        Some(vec![Tag::None, Tag::Ioc]),
+        Some(vec![Tag::Ioc]),
+    ] {
+        let mut filtered = view.clone();
+        filtered.predicate.tags = tags;
+        assert_eq!(find(0, &filtered), Some(host_a[2].key));
+    }
+    let mut filtered = view.clone();
+    filtered.predicate.tags = Some(vec![Tag::Ioc]);
+    assert_eq!(find(2, &filtered), Some(host_a[14].key));
+    filtered.before = Some(BASE + 30);
+    assert_eq!(find(2, &filtered), None);
+    filtered.predicate.tags = Some(vec![Tag::None]);
+    assert_eq!(find(0, &filtered), None);
+
+    let mut filtered = view.clone();
+    filtered.predicate.hosts = vec!["host-b".into()];
+    assert_eq!(find(0, &filtered), None);
+    filtered.predicate.hosts.clear();
+    filtered.predicate.include = "^/usr/lib/".into();
+    filtered.predicate.exclude = vec!["/file-2$".into()];
+    assert_eq!(find(0, &filtered), Some(host_a[4].key));
+    filtered.time_mask = 2;
+    assert_eq!(find(0, &filtered), Some(host_a[6].key));
+    // Clearing a tag must affect the next jump, including cached filtered views.
+    fixture
+        .store
+        .set_tag(host_a[2].key.record, Some(Tag::None))
+        .unwrap();
+    assert_eq!(find(0, &view), Some(host_a[4].key));
+}
+
+#[test]
+fn tagged_jumps_from_a_summary_skip_its_members_and_reveal_the_next_tagged_member() {
+    let fixture = Fixture::new(&[(0, 20, 0), (1, 20, 0), (60, 20, 0), (120, 20, 0)]);
+    let raw = fixture.raw(&View::default());
+    let target = &raw[47];
+    for row in [&raw[10], target] {
+        fixture
+            .store
+            .set_tag(row.key.record, Some(Tag::Ioc))
+            .unwrap();
+    }
+    let bursts: Vec<_> = [0, 60, 120]
+        .into_iter()
+        .map(|second| {
+            let origin = raw
+                .iter()
+                .find(|row| row.key.epoch == BASE + second)
+                .unwrap();
+            fixture.detect(&View::default(), origin, 5).unwrap()
+        })
+        .collect();
+    let mut app = loaded(&fixture, bursts[0].first);
+    app.session.views[0].bursts = bursts.clone();
+    key(&mut app, KeyCode::Char('g'));
+    let initial = request(key(&mut app, KeyCode::Char('g')));
+    apply_query(&fixture, &mut app, initial);
+    key(&mut app, KeyCode::Char('n'));
+    let find = request(key(&mut app, KeyCode::Char('t')));
+    assert_eq!(find.jump, Some(Jump::TaggedAfter(bursts[0].last)));
+    let centered = request(apply_query(&fixture, &mut app, find));
+    assert_eq!(centered.anchor, Some(target.key));
+    apply_query(&fixture, &mut app, centered);
+    let view = &app.session.views[0];
+    assert_eq!(view.bursts, vec![bursts[0].clone(), bursts[2].clone()]);
+    assert!(view.predicate.tags.is_none());
+    assert_eq!(view.selected, 4);
+    assert_eq!(app.rows[app.top + 4].key(), target.key);
+    assert_eq!(app.rows[app.top + 3].event().unwrap().tag, Tag::None);
+    // No later tagged event: preserve both the position and remaining folds.
+    let top = app.top;
+    key(&mut app, KeyCode::Char('n'));
+    let find = request(key(&mut app, KeyCode::Char('t')));
+    assert!(apply_query(&fixture, &mut app, find).is_empty());
+    assert!(app.status.contains("No later tagged event"));
+    assert_eq!(app.top, top);
+    assert_eq!(
+        app.session.views[0].bursts,
+        vec![bursts[0].clone(), bursts[2].clone()]
+    );
+}
+
+#[test]
+fn worker_tagged_jump_centers_a_same_second_target_with_untagged_context() {
+    let fixture = Fixture::new(&[(0, 20, 0)]);
+    let raw = fixture.raw(&View::default());
+    for row in [&raw[0], &raw[11]] {
+        fixture
+            .store
+            .set_tag(row.key.record, Some(Tag::Ioc))
+            .unwrap();
+    }
+    let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
+    let mut app = App::default();
+    app.height = 10;
+    let initial = loop {
+        let message = workers
+            .messages
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        match message {
+            Message::Ready(..) => break request(app.message(message)),
+            Message::Error(error) => panic!("{error}"),
+            _ => {}
+        }
+    };
+    worker_query(&workers, &mut app, initial);
+    key(&mut app, KeyCode::Char('n'));
+    let find = request(key(&mut app, KeyCode::Char('t')));
+    let centered = request(worker_query(&workers, &mut app, find));
+    assert_eq!(centered.anchor, Some(raw[11].key));
+    worker_query(&workers, &mut app, centered);
+    assert_eq!(app.session.views[0].selected, 4);
+    assert!(app.session.views[0].predicate.tags.is_none());
+    assert_eq!(app.rows[app.top + 4].key(), raw[11].key);
+    for slot in [3, 5] {
+        assert_eq!(app.rows[app.top + slot].event().unwrap().tag, Tag::None);
+    }
+    workers.shutdown();
+}

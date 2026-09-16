@@ -79,6 +79,7 @@ byte offset, original record, and matching rules.
 | Page Up / Page Down | Scroll a screen |
 | gg / G | Jump to the first / last matching event |
 | nm / nh / nd / nM / ny | Jump to the next minute / hour / day / month / year, centered |
+| nt | Jump to the next tagged event, centered |
 | zt / zz / zb | Put the selected event at the top / middle / bottom |
 | z ENTER / z. / z- | Aliases for zt / zz / zb |
 | TAB | Cycle untagged → SUSPICIOUS → IOC → MALICIOUS → untagged |
@@ -126,6 +127,12 @@ midnight is skipped, they use the first valid instant afterward.
 From a collapsed burst, a jump starts after the burst's final timestamp.
 A destination hidden inside another burst opens that burst; unrelated folds
 stay closed. See the [terminal capture](docs/images/time-jump.txt).
+
+`nt` finds the next event assessed as SUSPICIOUS, IOC, or MALICIOUS, including
+later events with the same timestamp. It respects the current filters, including
+any selected tag categories, and centers the destination among the view's
+surrounding events. From a burst summary, it searches after the burst's end. If there is
+no later matching tagged event, the view stays where it is.
 
 Press `q` to save and quit from the timeline, help, or record details. Ctrl+C
 also quits from dialogs. In text fields, `q` is ordinary input; in bookmark
@@ -388,8 +395,8 @@ storage, indexed queries, export, background workers, and the terminal UI.
 `src/ui/mouse.rs` handles pointer input and the controls registered during rendering.
 `src/burst.rs` detects dense seconds and builds display pages containing events
 or fold summaries; raw queries and exports continue to use `src/query.rs`.
-`src/navigation.rs` calculates timezone-aware boundaries and finds time jump
-destinations.
+`src/navigation.rs` calculates timezone-aware boundaries and finds time or tag
+jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
 Integration tests under `tests/` exercise evidence preservation, filtering,

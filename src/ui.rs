@@ -51,6 +51,7 @@ Mouse wheel scrolls details/help/bookmarks or moves between form fields.
 Under tmux, enable mouse with: set -g mouse on
 PageUp/PageDown scroll a screen. gg/G jump to beginning/end.
 nm/nh/nd/nM/ny jump to the next minute/hour/day/month/year and center it.
+nt jumps to the next tagged event and centers it, including within the same second.
 Jumps use the selected timezone and current filters; '' returns.
 From a collapsed burst, jumps start after its end.
 zt/zz/zb put the selected event at the top/middle/bottom.
@@ -465,6 +466,10 @@ impl App {
         };
         Some(self.find_jump(Jump::TimeBoundary(boundary)))
     }
+    fn next_tagged(&mut self) -> Option<Action> {
+        let origin = self.jump_origin()?;
+        Some(self.find_jump(Jump::TaggedAfter(origin)))
+    }
     fn find_jump(&mut self, jump: Jump) -> Action {
         let Action::Page(mut request) = self.load(Load::FindJump(jump), None, None, true) else {
             unreachable!()
@@ -708,6 +713,7 @@ impl App {
                         Jump::TimeBoundary(_) => {
                             "No matching event at or after the next time boundary"
                         }
+                        Jump::TaggedAfter(_) => "No later tagged event matches this view",
                     }
                     .into();
                     return vec![];
@@ -1198,6 +1204,9 @@ impl App {
             match (prefix, key.code) {
                 ('n', code) => {
                     if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
+                        if code == KeyCode::Char('t') {
+                            return self.next_tagged().into_iter().collect();
+                        }
                         let unit = match code {
                             KeyCode::Char('m') => Some(TimeUnit::Minute),
                             KeyCode::Char('h') => Some(TimeUnit::Hour),
@@ -1210,7 +1219,7 @@ impl App {
                             return self.next_time(unit).into_iter().collect();
                         }
                     }
-                    self.status = "Unknown n shortcut: use nm, nh, nd, nM, or ny".into();
+                    self.status = "Unknown n shortcut: use nm, nh, nd, nM, ny, or nt".into();
                     return vec![];
                 }
                 ('z', code) => {
@@ -1277,7 +1286,7 @@ impl App {
             KeyCode::Char('n') if key.modifiers.is_empty() => {
                 self.prefix = Some('n');
                 self.status =
-                    "n… minute: m · hour: h · day: d · month: M · year: y (Esc cancels)".into();
+                    "n… minute: m · hour: h · day: d · month: M · year: y · tagged: t (Esc cancels)".into();
             }
             KeyCode::Char('c') if key.modifiers.is_empty() => return self.collapse_burst(),
             KeyCode::Char('C') if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() => {
