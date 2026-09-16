@@ -83,6 +83,10 @@ Forking copies the current filters and location. The new tab is independent.
 Smart tabs—All tagged, SUSPICIOUS, IOC, and MALICIOUS—start across the whole
 investigation and update when tags change.
 
+The header shows numbered tabs, marks the active tab with `*`, and displays its
+position (for example, `Tab 2/4`). Use `gt`/`gT` to switch. When titles exceed the
+screen width, `<` and `>` indicate hidden tabs; the active tab stays visible.
+
 Use `ma` to set bookmark `a`, `'a` to jump to it, and `''` to return after a jump.
 Marks `a` through `z` persist. If the current filters hide a bookmarked event, a
 new unfiltered tab reveals it. In F8, press `d` followed by a letter to delete a

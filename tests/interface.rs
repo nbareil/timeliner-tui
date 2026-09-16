@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend, style::Color};
 use timeliner_tui::{
-    model::{EventKey, Row, Tag},
+    model::{EventKey, Row, Tag, View},
     ui::{Action, App},
     worker::Command,
 };
@@ -88,6 +88,108 @@ fn fork_copies_filters_but_smart_tab_is_global() {
     assert_eq!(view.after, None);
     assert!(view.predicate.exclude.is_empty());
     assert_eq!(view.predicate.tags, Some(vec![Tag::Ioc]));
+}
+
+#[test]
+fn tab_names_active_marker_and_position_remain_visible_when_switching() {
+    let mut app = app();
+    app.session.views = ["Timeline", "IOC", "Malicious"]
+        .into_iter()
+        .map(|name| View {
+            name: name.into(),
+            ..View::default()
+        })
+        .collect();
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    for active in 0..3 {
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let tabs = (0..120)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>();
+        let position = (0..120)
+            .map(|x| buffer[(x, 1)].symbol())
+            .collect::<String>();
+        for title in ["1 Timeline", "2 IOC", "3 Malicious"] {
+            assert!(tabs.contains(title), "{tabs}");
+        }
+        assert!(tabs.contains(&format!("* {}", active + 1)), "{tabs}");
+        assert!(
+            position.contains(&format!("Tab {}/3", active + 1)),
+            "{position}"
+        );
+        assert!(position.contains("gt/gT switch"), "{position}");
+        let marker = (0..120).find(|&x| buffer[(x, 0)].symbol() == "*").unwrap();
+        assert_eq!(buffer[(marker, 0)].bg, Color::Cyan);
+        assert_eq!(buffer[(marker, 0)].fg, Color::Black);
+        key(&mut app, KeyCode::Char('g'));
+        key(&mut app, KeyCode::Char('t'));
+    }
+    assert_eq!(app.session.active, 0);
+}
+
+#[test]
+fn overflowing_tabs_keep_the_active_tab_visible_and_signal_hidden_neighbors() {
+    let mut app = app();
+    app.session.views = (1..=12)
+        .map(|i| View {
+            name: format!("Host-{i}"),
+            ..View::default()
+        })
+        .collect();
+    let mut terminal = Terminal::new(TestBackend::new(40, 24)).unwrap();
+    for (active, hidden_left, hidden_right) in
+        [(0, false, true), (5, true, true), (11, true, false)]
+    {
+        app.session.active = active;
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let tabs = (0..40).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
+        let position = (0..40).map(|x| buffer[(x, 1)].symbol()).collect::<String>();
+        assert!(
+            tabs.contains(&format!("* {} Host-{}", active + 1, active + 1)),
+            "{tabs}"
+        );
+        assert_eq!(tabs.starts_with('<'), hidden_left, "{tabs}");
+        assert_eq!(tabs.ends_with('>'), hidden_right, "{tabs}");
+        assert!(
+            position.contains(&format!("Tab {}/12", active + 1)),
+            "{position}"
+        );
+    }
+}
+
+#[test]
+fn long_unicode_tab_names_do_not_hide_the_active_tab_after_resize() {
+    let mut app = app();
+    app.session.views = [
+        "very long previous view ".repeat(8),
+        "調査🔎".repeat(20),
+        "Next".into(),
+    ]
+    .into_iter()
+    .map(|name| View {
+        name,
+        ..View::default()
+    })
+    .collect();
+    app.session.active = 1;
+    for width in [30, 60, 120] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let tabs = (0..width)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>();
+        let position = (0..width)
+            .map(|x| buffer[(x, 1)].symbol())
+            .collect::<String>();
+        // Wide characters occupy a second buffer cell whose symbol is a space.
+        assert!(tabs.replace(' ', "").contains("*2調査"), "{tabs}");
+        assert!(tabs.starts_with('<'), "{tabs}");
+        assert!(tabs.ends_with('>'), "{tabs}");
+        assert!(position.contains("Tab 2/3"), "{position}");
+    }
 }
 #[test]
 fn bookmarks_and_return_jump() {

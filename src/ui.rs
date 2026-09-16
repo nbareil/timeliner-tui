@@ -814,6 +814,73 @@ impl App {
         vec![]
     }
 
+    fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
+        let active = self.session.active;
+        let block = Block::default()
+            .borders(Borders::BOTTOM)
+            .title_bottom(format!(
+                " Tab {}/{} · gt/gT switch · Timeliner ",
+                active + 1,
+                self.session.views.len()
+            ));
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        if inner.is_empty() {
+            return;
+        }
+        let columns = Layout::horizontal([
+            Constraint::Length(2),
+            Constraint::Fill(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        let titles = self
+            .session
+            .views
+            .iter()
+            .enumerate()
+            .map(|(index, view)| {
+                Line::from(format!(
+                    "{}{} {}",
+                    if index == active { "* " } else { "" },
+                    index + 1,
+                    display_text(&view.name)
+                ))
+            })
+            .collect::<Vec<_>>();
+        // Keep the selected title in view; reserve gutters for overflow arrows.
+        // Widths include the widget's one-cell padding on each side.
+        let capacity = columns[1].width as usize;
+        let mut start = active;
+        let mut end = active + 1;
+        let mut used = titles[active].width() + 2;
+        while start > 0 && used + titles[start - 1].width() + 3 <= capacity {
+            start -= 1;
+            used += titles[start].width() + 3;
+        }
+        while end < titles.len() && used + titles[end].width() + 3 <= capacity {
+            used += titles[end].width() + 3;
+            end += 1;
+        }
+        if start > 0 {
+            frame.render_widget(Paragraph::new("<"), columns[0]);
+        }
+        if end < titles.len() {
+            frame.render_widget(Paragraph::new(">").alignment(Alignment::Right), columns[2]);
+        }
+        frame.render_widget(
+            Tabs::new(titles[start..end].iter().cloned())
+                .select(active - start)
+                .highlight_style(
+                    Style::default()
+                        .bg(Color::Cyan)
+                        .fg(Color::Black)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            columns[1],
+        );
+    }
+
     pub fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
         let bar_height = if area.width < 110 { 2 } else { 1 };
@@ -827,23 +894,7 @@ impl App {
         .split(area);
         self.height = layout[2].height.saturating_sub(1).max(1) as usize;
         self.view_mut().selected = self.view().selected.min(self.height - 1);
-        let titles = self
-            .session
-            .views
-            .iter()
-            .map(|v| Line::from(display_text(&v.name)))
-            .collect::<Vec<_>>();
-        frame.render_widget(
-            Tabs::new(titles)
-                .select(self.session.active)
-                .highlight_style(Style::default().bg(Color::Cyan).fg(Color::Black))
-                .block(
-                    Block::default()
-                        .borders(Borders::BOTTOM)
-                        .title(" Timeliner "),
-                ),
-            layout[0],
-        );
+        self.draw_tabs(frame, layout[0]);
         let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
         let stamp = |e: Option<i64>| {
             e.and_then(|e| tz.timestamp_opt(e, 0).single())
