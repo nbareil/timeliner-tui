@@ -55,7 +55,7 @@ Tags belong to source records, so all their MACB events agree.
 
 F1 Help   F2 Tags / reload IOC rules   F3 Details
 F4 Timeframe   F5 Filters   F6 Fork view   F7 Smart tabs
-F8 Bookmarks   F9 Export   F10 Quit
+F8 Bookmarks   F9 Export   q Quit (also Ctrl+C)
 F11 switches between light and dark themes.
 1–9 select tabs directly; gt/gT switch tabs.
 Smart tabs start across the whole investigation.
@@ -765,7 +765,10 @@ impl App {
             return vec![];
         }
         self.mouse_state.reset_click();
-        if key.code == KeyCode::F(10)
+        if (key.code == KeyCode::Char('q')
+            && key.modifiers.is_empty()
+            && self.prefix.is_none()
+            && (self.modal.is_none() || matches!(self.modal, Some(Modal::Text(..)))))
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
         {
             return if self.ready {

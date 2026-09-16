@@ -76,6 +76,53 @@ fn tab_tags_record_and_enter_requests_details() {
         ));
     }
 }
+
+#[test]
+fn q_saves_and_quits_while_f10_no_longer_quits() {
+    let mut app = app();
+    assert!(key(&mut app, KeyCode::F(10)).is_empty());
+    assert!(matches!(
+        key(&mut app, KeyCode::Char('q')).as_slice(),
+        [Action::Command(Command::Save(_)), Action::Quit]
+    ));
+    key(&mut app, KeyCode::F(1));
+    assert!(matches!(
+        key(&mut app, KeyCode::Char('q')).as_slice(),
+        [Action::Command(Command::Save(_)), Action::Quit]
+    ));
+    let mut opening = App::default();
+    assert!(matches!(
+        key(&mut opening, KeyCode::Char('q')).as_slice(),
+        [Action::Quit]
+    ));
+}
+
+#[test]
+fn q_remains_available_in_forms_and_bookmark_commands() {
+    let mut app = app();
+    key(&mut app, KeyCode::Char('m'));
+    assert!(key(&mut app, KeyCode::Char('q')).is_empty());
+    assert_eq!(app.session.bookmarks[0].name, 'q');
+    key(&mut app, KeyCode::Char('j'));
+    key(&mut app, KeyCode::Char('\''));
+    assert!(key(&mut app, KeyCode::Char('q')).is_empty());
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key.record,
+        0
+    );
+    key(&mut app, KeyCode::F(8));
+    assert!(key(&mut app, KeyCode::Char('q')).is_empty());
+    key(&mut app, KeyCode::F(5));
+    assert!(key(&mut app, KeyCode::Char('q')).is_empty());
+    let actions = key(&mut app, KeyCode::Enter);
+    assert!(matches!(actions.as_slice(), [Action::Page(request)]
+        if request.view.predicate.include == "q"));
+    assert!(matches!(
+        app.key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
+            .as_slice(),
+        [Action::Command(Command::Save(_)), Action::Quit]
+    ));
+}
 #[test]
 fn fork_copies_filters_but_smart_tab_is_global() {
     let mut app = app();
@@ -758,7 +805,7 @@ fn tag_is_right_aligned_and_keys_survive_standard_terminal_resize() {
             .collect::<String>();
         let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(text.contains("F1 Help"));
-        assert!(text.contains("F10 Quit"));
+        assert!(text.contains("q Quit"));
     }
 }
 

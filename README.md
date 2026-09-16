@@ -92,7 +92,7 @@ byte offset, original record, and matching rules.
 | gt / gT | Next / previous tab |
 | F8 | Bookmark list |
 | F9 | Export |
-| F10 / Ctrl+C | Quit |
+| q / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
 | x | Exclude the selected pathname |
 | X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
@@ -107,6 +107,11 @@ The `z` shortcuts scroll around the selected event without changing its identity
 They load more rows when needed and stop at the beginning of the timeline if
 there are too few preceding events. Near the end, empty space can remain below
 the last event. Escape cancels a pending shortcut or page load.
+
+Press `q` to save and quit from the timeline, help, or record details. Ctrl+C
+also quits from dialogs. In text fields, `q` is ordinary input; in bookmark
+commands and the F8 list, it selects bookmark `q`. F10 has no action.
+See the [terminal capture](docs/images/quit.txt).
 
 TAB tags the **whole original bodyfile record**. Its other timestamp events carry
 the same assessment in every tab. TAB switches fields when a dialog has focus.

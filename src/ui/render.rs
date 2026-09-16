@@ -403,11 +403,15 @@ impl App {
             let cells = Layout::horizontal(vec![Constraint::Fill(1); group.len()]).split(strip);
             for (i, action) in group.iter().enumerate() {
                 let number = row * per_row + i + 1;
-                self.mouse_state
-                    .target(cells[i], MouseTarget::Key(KeyCode::F(number as u8)));
+                let (key, caption) = if number == 10 {
+                    (KeyCode::Char('q'), "q".into())
+                } else {
+                    (KeyCode::F(number as u8), format!("F{number}"))
+                };
+                self.mouse_state.target(cells[i], MouseTarget::Key(key));
                 frame.render_widget(
                     Paragraph::new(Line::from(vec![
-                        keycap(&format!("F{number}"), p),
+                        keycap(&caption, p),
                         label(format!(" {action}"), p.text),
                     ]))
                     .style(p.base().bg(p.surface)),

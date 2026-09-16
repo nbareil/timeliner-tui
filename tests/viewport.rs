@@ -283,7 +283,7 @@ fn z_shortcuts_and_aliases_reposition_cached_events_and_save_the_location() {
                 actions.as_slice(),
                 [Action::Command(Command::Detail(id, _))] if *id == selected
             ));
-            let actions = key(&mut app, KeyCode::F(10));
+            let actions = key(&mut app, KeyCode::Char('q'));
             let [Action::Command(Command::Save(session)), Action::Quit] = actions.as_slice() else {
                 panic!("Expected session save before quitting");
             };
