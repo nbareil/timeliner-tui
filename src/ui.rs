@@ -97,6 +97,7 @@ Each second must exceed the threshold (default 100 events/s). No gaps are bridge
 After each fold, c tries the next visible entry until it cannot collapse or reaches the end.
 An existing summary stops the sequence. Escape cancels further work, keeping completed folds.
 C edits the threshold. c or ENTER/F3 on a summary expands it.
+Shift+ENTER shows only that burst's tagged events; '' returns to the folded view.
 Other hosts remain visible. Tag edits keep unrelated folds closed.
 Collapsed groups are saved per tab and restored after restarting.
 Filters and IOC rule reloads reset folds. Bookmark jumps reveal members.
@@ -124,6 +125,7 @@ enum Load {
         automatic: bool,
     },
     Collapse(EventKey),
+    TaggedBurst,
     FindJump(Jump),
     CenterJump(EventKey),
     Step {
@@ -394,6 +396,27 @@ impl App {
         let mut view = self.view().clone();
         view.bursts.retain(|burst| burst.first != first);
         Some(self.load_around(Load::Filter(Some(origin)), origin, view))
+    }
+    fn show_tagged_burst(&mut self) -> Option<Action> {
+        let DisplayRow::Burst(burst) = self.selected()? else {
+            return None;
+        };
+        if burst.tagged == 0 {
+            self.status = "No tagged events in this burst".into();
+            return None;
+        }
+        let mut view = self.view().clone();
+        view.after = Some(burst.first.epoch);
+        view.before = Some(burst.last.epoch);
+        view.predicate.hosts = vec![burst.host.clone()];
+        view.predicate
+            .tags
+            .get_or_insert_default()
+            .retain(|tag| *tag != Tag::None);
+        view.bursts.clear();
+        view.top = None;
+        view.selected = 0;
+        Some(self.load(Load::TaggedBurst, Some(view), None, true))
     }
     fn collapse_burst(&mut self) -> Vec<Action> {
         if self.pending.is_some() {
@@ -735,6 +758,10 @@ impl App {
                 if matches!(mode, Load::DetectBurst { .. } | Load::FindJump(_)) {
                     return vec![];
                 }
+                if matches!(mode, Load::TaggedBurst) && rows.is_empty() {
+                    self.status = "No tagged events in this burst".into();
+                    return vec![];
+                }
                 if let Load::CenterJump(focus) = mode
                     && !rows.iter().any(|row| row.key() == focus)
                 {
@@ -796,16 +823,21 @@ impl App {
                     }
                     Load::Replace
                     | Load::Collapse(_)
+                    | Load::TaggedBurst
                     | Load::Filter(_)
                     | Load::FilterLast(_)
                     | Load::Last
                     | Load::Mark(_, _) => {
+                        if matches!(mode, Load::TaggedBurst) {
+                            self.remember();
+                            self.previous = Some((self.session.active, self.view().clone()));
+                        }
                         if let Some(view) = candidate {
                             *self.view_mut() = view;
                         }
                         let last = matches!(mode, Load::Last | Load::FilterLast(_));
                         self.end_before = (anchor.is_none()
-                            && matches!(mode, Load::Replace | Load::Filter(_)))
+                            && matches!(mode, Load::Replace | Load::Filter(_) | Load::TaggedBurst))
                             || (last && rows.len() < limit);
                         self.end_after = rows.len() < limit || last;
                         self.rows = rows;
@@ -903,6 +935,8 @@ impl App {
                     .min(self.rows.len().saturating_sub(self.top + 1));
                 self.status = if self.rows.is_empty() {
                     "No matching events. F4 timeframe · F5 filters".into()
+                } else if matches!(mode, Load::TaggedBurst) {
+                    "Tagged events in burst · '' returns to folded view".into()
                 } else {
                     "Ready".into()
                 };
@@ -1607,6 +1641,9 @@ impl App {
             KeyCode::Enter | KeyCode::F(3) => {
                 if matches!(self.selected(), Some(DisplayRow::Burst(_))) {
                     if self.pending.is_none() {
+                        if key.code == KeyCode::Enter && key.modifiers == KeyModifiers::SHIFT {
+                            return self.show_tagged_burst().into_iter().collect();
+                        }
                         return self.expand_burst().into_iter().collect();
                     }
                     return vec![];
@@ -1739,7 +1776,16 @@ fn set_mouse_capture(enabled: bool) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+static KEYBOARD_ENHANCEMENT_ACTIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 fn restore_terminal() {
+    #[cfg(unix)]
+    if KEYBOARD_ENHANCEMENT_ACTIVE.swap(false, Ordering::Relaxed) {
+        // The panic hook and TerminalGuard can both restore the terminal.
+        let _ = execute!(io::stdout(), event::PopKeyboardEnhancementFlags);
+    }
     let _ = execute!(
         io::stdout(),
         DisableMouseCapture,
@@ -1760,6 +1806,16 @@ pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
     enable_raw_mode()?;
     let _guard = TerminalGuard;
     execute!(io::stdout(), EnterAlternateScreen)?;
+    #[cfg(unix)]
+    {
+        KEYBOARD_ENHANCEMENT_ACTIVE.store(true, Ordering::Relaxed);
+        execute!(
+            io::stdout(),
+            event::PushKeyboardEnhancementFlags(
+                event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+            )
+        )?;
+    }
     set_mouse_capture(true)?;
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

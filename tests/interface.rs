@@ -83,6 +83,14 @@ fn tab_tags_record_and_enter_requests_details() {
             ))]
         ));
     }
+    assert!(matches!(
+        app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT))
+            .as_slice(),
+        [Action::Command(Command::Detail(
+            0,
+            chrono_tz::America::New_York
+        ))]
+    ));
 }
 
 #[test]

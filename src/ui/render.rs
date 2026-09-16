@@ -325,9 +325,14 @@ impl App {
                 } else {
                     format!(" · {} IOC matches", burst.ioc_matches)
                 };
+                let tagged = if burst.tagged > 0 {
+                    " · Shift+Enter tagged"
+                } else {
+                    ""
+                };
                 frame.render_widget(
                     Paragraph::new(format!(
-                        "▶ {} events · through {end}{matches} · Enter expand",
+                        "▶ {} events · through {end}{matches} · Enter expand{tagged}",
                         burst.count,
                     ))
                     .style(

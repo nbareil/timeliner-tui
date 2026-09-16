@@ -1,0 +1,39 @@
+Folded burst:
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                                                                                              F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   0 exclusions   F5 edit
+   TIMESTAMP           HOST                       MACB PATH                                                                                                                                             ASSESSMENT
+   2020-09-13 12:26:40 host-a                     ·a·· /usr/lib/file-0                                                                                                                                   MALICIOUS
+   2020-09-13 12:26:40 host-a                     m··· /usr/share/file-1                                                                                                                                 MALICIOUS
+▌  2020-09-13 12:26:41 host-a                     ma·· ▶ 2200 events · through 2020-09-13 12:26:42 · 2 IOC matches · Enter expand · Shift+Enter tagged                                                    4 tagged
+   2020-09-13 12:26:41 host-b                     ·a·· /usr/lib/file-0                                                                                                                                   MALICIOUS
+   2020-09-13 12:26:41 host-b                     m··· /usr/share/file-1                                                                                                                                 MALICIOUS
+   2020-09-13 12:26:41 host-b                     ma·· /usr/lib/file-2                                                                                                                                   MALICIOUS
+   2020-09-13 12:26:42 host-b                     ·a·· /usr/lib/file-0                                                                                                                                   MALICIOUS
+   2020-09-13 12:26:42 host-b                     m··· /usr/share/file-1                                                                                                                                 MALICIOUS
+   2020-09-13 12:26:42 host-b                     ma·· /usr/lib/file-2                                                                                                                                   MALICIOUS
+   2020-09-13 12:26:43 host-a                     ·a·· /usr/lib/file-0                                                                                                                                   MALICIOUS
+  ● Stopped: next entry does not exceed 5 events/s on its host (C changes threshold)
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help             F2  Tags             F3  Detail           F4  Time             F5  Filter           F6  Fork             F7  Views            F8  Marks            F9  Export           q  Quit
+
+After Shift+Enter:
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                                                                                                                              F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  2020-09-13 12:26:41  →  2020-09-13 12:26:42   UTC   macb   F4 edit
+  FIND  All paths   ·   host-a   ·   0 exclusions   F5 edit
+   TIMESTAMP           HOST                       MACB PATH                                                                                                                                             ASSESSMENT
+▌  2020-09-13 12:26:41 host-a                     ·a·· /usr/lib/file-0                                                                                                                                  SUSPICIOUS
+   2020-09-13 12:26:41 host-a                     m··· /usr/lib/file-400                                                                                                                                       IOC
+   2020-09-13 12:26:42 host-a                     ma·· /usr/lib/file-2                                                                                                                                         IOC
+   2020-09-13 12:26:42 host-a                     m··· /usr/share/file-1099                                                                                                                              MALICIOUS
+
+
+
+
+
+
+  ● Tagged events in burst · '' returns to folded view
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C threshold   Esc cancel
+ F1  Help             F2  Tags             F3  Detail           F4  Time             F5  Filter           F6  Fork             F7  Views            F8  Marks            F9  Export           q  Quit

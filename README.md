@@ -116,6 +116,7 @@ record. See the
 | q / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
 | c | Collapse successive bursts starting at the selected event; expand a selected summary |
+| Shift+Enter | Show only the selected burst's tagged events; `''` returns to the folded view |
 | C (Shift+c) | Set the burst density threshold |
 | x | Exclude all SPACE-selected pathnames, or the focused pathname |
 | X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
@@ -248,6 +249,15 @@ or **c** on the summary to expand it and return to the event where you requested
 the fold. Bookmark jumps reveal their exact event. Expand a summary before
 tagging or excluding an individual record.
 
+Press **Shift+Enter** on a summary to show only its tagged events (SUSPICIOUS,
+IOC, or MALICIOUS), starting with the earliest match. This narrows the current
+tab to the burst's host and time range while keeping its other filters.
+Press **`''`** to return to the folded view and its selection. If the burst has
+no tagged events, the view stays where it is. Automatic IOC matches whose
+assessment has been cleared are not tagged events.
+Shift+Enter requires a terminal that reports the Shift modifier for Enter;
+the application enables the enhanced keyboard protocol on supporting terminals.
+
 Folds are saved with their tab and restored when reopening the investigation;
 forking copies them independently. Expanding a group saves its expanded state.
 On reopening, summary counts are refreshed from the current index, including
@@ -270,7 +280,8 @@ containing only the selected host's matching events, scrolling seeks past its
 hidden records. Interleaved hosts can require scanning hidden candidates to
 retrieve the other hosts' events.
 
-See the [burst summary](docs/images/bursts.txt) and
+See the [tagged-event drill-down](docs/images/tagged-burst.txt),
+[burst summary](docs/images/bursts.txt), and
 [successive collapse](docs/images/collapse-chain.txt) terminal captures, rendered
 from synthetic data.
 

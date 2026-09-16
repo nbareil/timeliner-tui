@@ -813,6 +813,258 @@ fn keyboard_fold_expands_to_original_event_and_bookmark_jumps_reveal_members() {
 }
 
 #[test]
+fn shift_enter_shows_only_the_bursts_tagged_events_and_returns_to_the_fold() {
+    let mut fixture = Fixture::new(&[(0, 2, 0), (1, 1100, 3), (2, 1100, 3), (3, 2, 0)]);
+    fixture
+        .store
+        .reload_rules(
+            &Rules::from_yaml("- path: /usr/lib/file-2").unwrap(),
+            |_| true,
+        )
+        .unwrap();
+    let raw = fixture.raw(&View::default());
+    let members: Vec<_> = raw
+        .iter()
+        .filter(|row| row.host == "host-a" && (BASE + 1..=BASE + 2).contains(&row.key.epoch))
+        .collect();
+    for (index, tag) in [
+        (0, Tag::Suspicious),
+        (2, Tag::None), // An automatic match whose assessment was cleared.
+        (400, Tag::Ioc),
+        (2199, Tag::Malicious),
+    ] {
+        fixture
+            .store
+            .set_tag(members[index].key.record, Some(tag))
+            .unwrap();
+    }
+    for row in raw
+        .iter()
+        .filter(|row| row.host == "host-b" || row.key.epoch == BASE || row.key.epoch == BASE + 3)
+    {
+        fixture
+            .store
+            .set_tag(row.key.record, Some(Tag::Malicious))
+            .unwrap();
+    }
+    let expected: Vec<_> = fixture
+        .raw(&View::default())
+        .into_iter()
+        .filter(|row| {
+            row.host == "host-a"
+                && (BASE + 1..=BASE + 2).contains(&row.key.epoch)
+                && row.tag != Tag::None
+        })
+        .map(|row| row.key)
+        .collect();
+    assert_eq!(expected.len(), 4);
+    let mut app = loaded(&fixture, members[1500].key);
+    fold(&fixture, &mut app);
+    let mut terminal = Terminal::new(TestBackend::new(210, 18)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let capture = |terminal: &Terminal<TestBackend>| {
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let folded_capture = capture(&terminal);
+    assert!(folded_capture.contains("Shift+Enter tagged"));
+    let folded = serde_json::to_value(&app.session.views[0]).unwrap();
+    let folded_key = app.rows[app.top + app.session.views[0].selected].key();
+
+    let expansion = request(app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)));
+    assert_eq!(serde_json::to_value(&app.session.views[0]).unwrap(), folded);
+    assert!(apply_query(&fixture, &mut app, expansion).is_empty());
+    assert_eq!(
+        app.rows.iter().map(DisplayRow::key).collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(app.top + app.session.views[0].selected, 0);
+    assert!(app.session.views[0].bursts.is_empty());
+    assert!(app.status.contains("'' returns"));
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    if std::env::var_os("TIMELINER_CAPTURE_TAGGED_BURST").is_some() {
+        println!(
+            "Folded burst:\n{folded_capture}\n\nAfter Shift+Enter:\n{}",
+            capture(&terminal)
+        );
+    }
+
+    key(&mut app, KeyCode::Char('\''));
+    let back = request(key(&mut app, KeyCode::Char('\'')));
+    assert!(apply_query(&fixture, &mut app, back).is_empty());
+    assert_eq!(serde_json::to_value(&app.session.views[0]).unwrap(), folded);
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        folded_key
+    );
+    assert!(matches!(
+        app.rows[app.top + app.session.views[0].selected],
+        DisplayRow::Burst(_)
+    ));
+}
+
+#[test]
+fn shift_enter_intersects_existing_filters_and_keeps_paging_within_the_burst() {
+    let fixture = Fixture::new(&[(0, 2, 0), (1, 1200, 2), (2, 1200, 2), (3, 2, 0)]);
+    for row in fixture.raw(&View::default()) {
+        let index: usize = row.path.rsplit('-').next().unwrap().parse().unwrap();
+        fixture
+            .store
+            .set_tag(
+                row.key.record,
+                Some([Tag::None, Tag::Suspicious, Tag::Ioc, Tag::Malicious][index / 2 % 4]),
+            )
+            .unwrap();
+    }
+    for tags in [
+        None,
+        Some(vec![]),
+        Some(vec![Tag::None, Tag::Ioc]),
+        Some(vec![Tag::Ioc]),
+    ] {
+        let mut view = View {
+            after: Some(BASE + 1),
+            before: Some(BASE + 2),
+            time_mask: 1,
+            ..View::default()
+        };
+        view.predicate.include = "^/usr/lib/".into();
+        view.predicate.exclude = vec!["file-0$".into()];
+        view.predicate.hosts = vec!["host-a".into(), "host-b".into()];
+        view.predicate.tags = tags.clone();
+        let matching = fixture.raw(&view);
+        let expected: Vec<_> = matching
+            .iter()
+            .filter(|row| row.host == "host-a" && row.tag != Tag::None)
+            .map(|row| row.key)
+            .collect();
+        assert!(expected.len() > 128);
+        view.top = Some(expected[expected.len() / 2]);
+        let mut app = App::default();
+        app.height = 10;
+        let initial = request(app.message(Message::Ready(
+            Session {
+                views: vec![view.clone()],
+                burst_threshold: 5,
+                ..Session::default()
+            },
+            String::new(),
+        )));
+        apply_query(&fixture, &mut app, initial);
+        fold(&fixture, &mut app);
+        let expansion = request(app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)));
+        assert_eq!(expansion.view.predicate.include, view.predicate.include);
+        assert_eq!(expansion.view.predicate.exclude, view.predicate.exclude);
+        assert_eq!(expansion.view.time_mask, view.time_mask);
+        assert_eq!(
+            expansion.view.predicate.tags,
+            Some(if tags.as_ref().is_some_and(|tags| !tags.is_empty()) {
+                vec![Tag::Ioc]
+            } else {
+                vec![]
+            })
+        );
+        apply_query(&fixture, &mut app, expansion);
+        for reverse in [false, true] {
+            assert_eq!(
+                fixture
+                    .displayed(&app.session.views[0], reverse, 128)
+                    .iter()
+                    .map(DisplayRow::key)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
+        let last = request(key(&mut app, KeyCode::Char('G')));
+        apply_query(&fixture, &mut app, last);
+        assert_eq!(
+            app.rows[app.top + app.session.views[0].selected].key(),
+            *expected.last().unwrap()
+        );
+    }
+}
+
+#[test]
+fn cancelled_failed_or_empty_tagged_expansion_keeps_the_fold_and_return_history() {
+    let fixture = Fixture::new(&[(0, 20, 0)]);
+    let raw = fixture.raw(&View::default());
+    fixture
+        .store
+        .set_tag(raw[2].key.record, Some(Tag::Ioc))
+        .unwrap();
+    for outcome in ["cancel", "error", "empty"] {
+        let mut app = loaded(&fixture, raw[10].key);
+        fold(&fixture, &mut app);
+        let folded = serde_json::to_value(&app.session.views[0]).unwrap();
+        let expansion = request(app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)));
+        // A second press while loading must not replace the pending request.
+        assert!(
+            app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT))
+                .is_empty()
+        );
+        match outcome {
+            "cancel" => {
+                key(&mut app, KeyCode::Esc);
+                apply_query(&fixture, &mut app, expansion);
+            }
+            "error" => {
+                app.message(Message::QueryError(
+                    expansion.generation,
+                    "test error".into(),
+                ));
+            }
+            "empty" => {
+                app.message(Message::Page(expansion.generation, vec![]));
+                assert!(app.status.contains("No tagged events"));
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(serde_json::to_value(&app.session.views[0]).unwrap(), folded);
+        assert!(matches!(
+            app.rows[app.top + app.session.views[0].selected],
+            DisplayRow::Burst(_)
+        ));
+        key(&mut app, KeyCode::Char('\''));
+        assert!(key(&mut app, KeyCode::Char('\'')).is_empty());
+    }
+}
+
+#[test]
+fn shift_enter_on_an_untagged_burst_keeps_it_collapsed() {
+    let fixture = Fixture::new(&[(0, 20, 0)]);
+    let origin = fixture.raw(&View::default())[10].key;
+    let mut app = loaded(&fixture, origin);
+    fold(&fixture, &mut app);
+    let folded = serde_json::to_value(&app.session.views[0]).unwrap();
+    assert!(
+        app.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT))
+            .is_empty()
+    );
+    assert_eq!(app.status, "No tagged events in this burst");
+    assert_eq!(serde_json::to_value(&app.session.views[0]).unwrap(), folded);
+    // Ordinary Enter still expands every member.
+    let expansion = request(key(&mut app, KeyCode::Enter));
+    apply_query(&fixture, &mut app, expansion);
+    assert_eq!(
+        fixture.displayed(&app.session.views[0], false, 128).len(),
+        20
+    );
+    assert_eq!(
+        app.rows[app.top + app.session.views[0].selected].key(),
+        origin
+    );
+}
+
+#[test]
 fn cancelled_discovery_or_projection_leaves_the_existing_view_intact() {
     let fixture = Fixture::new(&[(0, 100, 0)]);
     let origin = fixture.raw(&View::default())[50].key;
