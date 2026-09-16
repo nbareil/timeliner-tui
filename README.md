@@ -115,7 +115,7 @@ record. See the
 | F10 | Toggle mouse capture for terminal text selection and copying |
 | q / Ctrl+C | Quit |
 | F11 | Switch light/dark theme |
-| c | Collapse a burst around the selected event; expand a selected summary |
+| c | Collapse successive bursts starting at the selected event; expand a selected summary |
 | C (Shift+c) | Set the burst density threshold |
 | x | Exclude all SPACE-selected pathnames, or the focused pathname |
 | X (Shift+x) | Edit an exclusion for the selected entry's parent directory |
@@ -227,6 +227,11 @@ and forward while each consecutive second exceeds the threshold. A sparse or
 empty second ends the burst; no gaps are bridged. An isolated dense second also
 qualifies. Density describes activity, not whether it was a system upgrade.
 
+After each fold, the application tries to collapse the next visible entry.
+It continues until that entry is at or below the threshold, is already a summary, or
+there are no more entries. A sparse entry stops the sequence even if a later
+burst could collapse. Each burst remains a separate summary.
+
 The default threshold is **more than 100 events per second**. Press **C** to
 change it to a positive whole number; the workspace saves the setting. Changing
 the threshold affects subsequent collapse requests. Counts refer to timeline
@@ -235,8 +240,9 @@ The current timeframe, path, host, assessment, and timestamp-type filters apply.
 
 A summary shows the event count, beginning and end timestamps, combined MACB
 flags, and counts of tagged events and IOC matches when present. Events from
-other hosts stay in chronological order outside the group. The summary stays
-selected, with earlier events visible above it when available so `k` can move
+other hosts stay in chronological order outside the group and can collapse in
+turn if their next visible entry qualifies. The most recent summary stays
+selected, with earlier entries visible above it when available so `k` can move
 back into them. Press **Enter**, **F3**,
 or **c** on the summary to expand it and return to the event where you requested
 the fold. Bookmark jumps reveal their exact event. Expand a summary before
@@ -256,14 +262,17 @@ other hosts becoming visible remain outside the fold. Reloading IOC rules clears
 folds across tabs.
 Exports include folded records according to the normal export filters.
 
-Detection runs in the background; Escape cancels it and keeps the current view.
+Detection runs in the background; Escape cancels further work and keeps any
+folds already displayed.
 Large waves still take time to count on their first collapse. Only group
 descriptors and bounded pages are retained in memory. For a folded interval
 containing only the selected host's matching events, scrolling seeks past its
 hidden records. Interleaved hosts can require scanning hidden candidates to
 retrieve the other hosts' events.
 
-See the [terminal capture](docs/images/bursts.txt), rendered from synthetic data.
+See the [burst summary](docs/images/bursts.txt) and
+[successive collapse](docs/images/collapse-chain.txt) terminal captures, rendered
+from synthetic data.
 
 ## Mouse and tmux
 

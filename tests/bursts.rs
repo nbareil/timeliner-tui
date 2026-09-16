@@ -429,9 +429,182 @@ fn loaded(fixture: &Fixture, origin: EventKey) -> App {
 }
 
 fn fold(fixture: &Fixture, app: &mut App) {
-    let detection = request(key(app, KeyCode::Char('c')));
-    let projection = request(apply_query(fixture, app, detection));
-    assert!(apply_query(fixture, app, projection).is_empty());
+    let mut actions = key(app, KeyCode::Char('c'));
+    for _ in 0..10_000 {
+        let query = request(actions);
+        actions = apply_query(fixture, app, query);
+        if actions.is_empty() {
+            return;
+        }
+    }
+    panic!("Automatic collapsing did not terminate");
+}
+
+#[test]
+fn collapse_continues_through_adjacent_bursts_and_stops_at_a_sparse_entry() {
+    let fixture = Fixture::new(&[(0, 8, 0), (2, 9, 0), (4, 10, 0), (6, 5, 0), (8, 12, 0)]);
+    let raw = fixture.raw(&View::default());
+    let mut app = loaded(&fixture, raw[3].key);
+    fold(&fixture, &mut app);
+    let view = &app.session.views[0];
+    assert_eq!(
+        view.bursts
+            .iter()
+            .map(|burst| burst.count)
+            .collect::<Vec<_>>(),
+        [8, 9, 10]
+    );
+    assert_eq!(app.rows[app.top + view.selected].key().epoch, BASE + 4);
+    assert!(
+        app.rows
+            .iter()
+            .any(|row| row.event().is_some() && row.key().epoch == BASE + 8)
+    );
+    assert!(app.status.contains("next entry"));
+    let mut terminal = Terminal::new(TestBackend::new(160, 22)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
+    let text = (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for count in [8, 9, 10] {
+        assert!(text.contains(&format!("{count} events")), "{text}");
+    }
+    if std::env::var_os("TIMELINER_CAPTURE_COLLAPSE_CHAIN").is_some() {
+        println!("{text}");
+    }
+}
+
+#[test]
+fn collapse_continues_on_an_interleaved_host_and_stops_at_the_end() {
+    let fixture = Fixture::new(&[(0, 8, 9), (1, 10, 11)]);
+    let raw = fixture.raw(&View::default());
+    let mut app = loaded(&fixture, raw[0].key);
+    fold(&fixture, &mut app);
+    assert_eq!(app.rows.len(), 2);
+    assert_eq!(app.session.views[0].bursts.len(), 2);
+    for (row, host, count) in [(&app.rows[0], "host-a", 18), (&app.rows[1], "host-b", 20)] {
+        let DisplayRow::Burst(summary) = row else {
+            panic!("Expected both hosts to collapse");
+        };
+        assert_eq!(summary.host, host);
+        assert_eq!(summary.count, count);
+    }
+    assert_eq!(app.status, "Ready");
+}
+
+#[test]
+fn collapse_does_not_skip_a_sparse_first_entry() {
+    let fixture = Fixture::new(&[(0, 2, 0), (2, 8, 0)]);
+    let mut app = loaded(&fixture, fixture.raw(&View::default())[0].key);
+    fold(&fixture, &mut app);
+    assert!(app.session.views[0].bursts.is_empty());
+    assert!(app.status.contains("No burst here"));
+}
+
+#[test]
+fn automatic_collapse_stops_before_an_existing_summary() {
+    let fixture = Fixture::new(&[(0, 8, 0), (2, 9, 0), (4, 2, 0)]);
+    let raw = fixture.raw(&View::default());
+    let mut app = loaded(&fixture, raw[8].key);
+    fold(&fixture, &mut app);
+    let existing = app.session.views[0].bursts[0].clone();
+    key(&mut app, KeyCode::Char('g'));
+    let first = request(key(&mut app, KeyCode::Char('g')));
+    assert!(apply_query(&fixture, &mut app, first).is_empty());
+    fold(&fixture, &mut app);
+    assert_eq!(app.session.views[0].bursts.len(), 2);
+    assert!(app.session.views[0].bursts.contains(&existing));
+    assert!(matches!(app.rows[0], DisplayRow::Burst(_)));
+    assert!(matches!(app.rows[1], DisplayRow::Burst(_)));
+}
+
+#[test]
+fn cancelling_an_automatic_followup_keeps_completed_folds_and_ignores_late_results() {
+    let fixture = Fixture::new(&[(0, 8, 0), (2, 9, 0)]);
+    for cancel_projection in [false, true] {
+        let mut app = loaded(&fixture, fixture.raw(&View::default())[0].key);
+        let detection = request(key(&mut app, KeyCode::Char('c')));
+        let projection = request(apply_query(&fixture, &mut app, detection));
+        let mut followup = request(apply_query(&fixture, &mut app, projection));
+        assert_eq!(
+            followup.detect_burst.as_ref().unwrap().origin.epoch,
+            BASE + 2
+        );
+        if cancel_projection {
+            followup = request(apply_query(&fixture, &mut app, followup));
+        }
+        assert!(matches!(
+            key(&mut app, KeyCode::Esc).as_slice(),
+            [Action::Cancel]
+        ));
+        assert!(apply_query(&fixture, &mut app, followup).is_empty());
+        assert_eq!(app.session.views[0].bursts.len(), 1);
+        assert!(matches!(app.rows[0], DisplayRow::Burst(_)));
+        assert!(app.rows[1].event().is_some());
+        assert_eq!(app.status, "Cancelled");
+        let expansion = request(key(&mut app, KeyCode::Char('c')));
+        assert!(apply_query(&fixture, &mut app, expansion).is_empty());
+        assert!(app.session.views[0].bursts.is_empty());
+    }
+}
+
+#[test]
+fn automatic_collapse_reserves_room_for_the_next_entry_in_a_full_page() {
+    let mut seconds: Vec<_> = (0..1100).map(|second| (second, 1, 0)).collect();
+    seconds.extend([(1100, 8, 0), (1102, 9, 0)]);
+    let fixture = Fixture::new(&seconds);
+    let mut app = loaded(&fixture, fixture.raw(&View::default())[1100].key);
+    app.height = 2200;
+    fold(&fixture, &mut app);
+    assert_eq!(app.session.views[0].bursts.len(), 2);
+}
+
+#[test]
+fn automatic_collapse_continues_beyond_the_initial_cached_page() {
+    let seconds: Vec<_> = (0..150).map(|index| (index * 2, 6, 0)).collect();
+    let fixture = Fixture::new(&seconds);
+    let mut app = loaded(&fixture, fixture.raw(&View::default())[0].key);
+    assert_eq!(app.rows.len(), 128);
+    fold(&fixture, &mut app);
+    let view = &app.session.views[0];
+    assert_eq!(view.bursts.len(), 150);
+    assert_eq!(app.rows[app.top + view.selected].key().epoch, BASE + 298);
+    assert!(app.rows.len() <= 128);
+    fixture.store.save_session(&app.session).unwrap();
+    assert_eq!(
+        fixture.store.session().unwrap().views[0].bursts,
+        view.bursts
+    );
+}
+
+#[test]
+fn a_followup_query_error_stops_collapsing_and_keeps_the_last_summary() {
+    let fixture = Fixture::new(&[(0, 8, 0), (2, 9, 0)]);
+    let mut app = loaded(&fixture, fixture.raw(&View::default())[0].key);
+    let detection = request(key(&mut app, KeyCode::Char('c')));
+    let projection = request(apply_query(&fixture, &mut app, detection));
+    let followup = request(apply_query(&fixture, &mut app, projection));
+    assert!(
+        app.message(Message::QueryError(
+            followup.generation,
+            "Query failed".into()
+        ))
+        .is_empty()
+    );
+    assert!(apply_query(&fixture, &mut app, followup).is_empty());
+    assert_eq!(app.session.views[0].bursts.len(), 1);
+    assert_eq!(app.status, "Query failed");
+    let expansion = request(key(&mut app, KeyCode::Char('c')));
+    assert!(apply_query(&fixture, &mut app, expansion).is_empty());
+    assert!(app.session.views[0].bursts.is_empty());
 }
 
 #[test]
@@ -904,8 +1077,8 @@ fn folded_summary_renders_counts_time_range_and_the_new_quit_control() {
 }
 
 #[test]
-fn worker_executes_discovery_and_folded_paging_on_the_query_thread() {
-    let fixture = Fixture::new(&[(0, 8, 0), (1, 9, 0)]);
+fn worker_executes_successive_discoveries_and_folded_paging_on_the_query_thread() {
+    let fixture = Fixture::new(&[(0, 8, 0), (2, 9, 0), (4, 2, 0)]);
     let origin = fixture.raw(&View::default())[5].clone();
     let workers = Workers::start(fixture.store.root.clone(), vec![], None, None, None, None);
     loop {
@@ -920,42 +1093,38 @@ fn worker_executes_discovery_and_folded_paging_on_the_query_thread() {
         }
     }
     let mut app = loaded(&fixture, origin.key);
-    let discovery = request(key(&mut app, KeyCode::Char('c')));
-    workers.clock.store(discovery.generation, Ordering::Relaxed);
-    workers.pages.send(discovery).unwrap();
-    let projection = loop {
-        let message = workers
-            .messages
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
-        if let Message::Burst(_, Some(ref burst)) = message {
-            assert_eq!(burst.count, 17);
-            break request(app.message(message));
+    let mut actions = key(&mut app, KeyCode::Char('c'));
+    let mut detected = Vec::new();
+    let mut queries = 0;
+    while !actions.is_empty() {
+        queries += 1;
+        assert!(queries <= 5, "Automatic collapsing did not terminate");
+        let query = request(actions);
+        workers.clock.store(query.generation, Ordering::Relaxed);
+        workers.pages.send(query).unwrap();
+        actions = loop {
+            let message = workers
+                .messages
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            assert!(!matches!(
+                message,
+                Message::Error(_) | Message::QueryError(..)
+            ));
+            if let Message::Burst(_, ref burst) = message {
+                detected.push(burst.as_ref().map(|burst| burst.count));
+            }
+            let complete = matches!(message, Message::Burst(..) | Message::Page(..));
+            let next = app.message(message);
+            if complete {
+                break next;
+            }
         }
-        assert!(!matches!(
-            message,
-            Message::Error(_) | Message::QueryError(..)
-        ));
-    };
-    workers
-        .clock
-        .store(projection.generation, Ordering::Relaxed);
-    workers.pages.send(projection).unwrap();
-    loop {
-        let message = workers
-            .messages
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap();
-        if matches!(message, Message::Page(..)) {
-            app.message(message);
-            break;
-        }
-        assert!(!matches!(
-            message,
-            Message::Error(_) | Message::QueryError(..)
-        ));
     }
+    assert_eq!(detected, [Some(8), Some(9), None]);
     assert!(matches!(app.rows[0], DisplayRow::Burst(_)));
+    assert!(matches!(app.rows[1], DisplayRow::Burst(_)));
+    assert!(app.rows[2].event().is_some());
     workers.shutdown();
 }
 

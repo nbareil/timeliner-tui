@@ -94,6 +94,8 @@ Type to edit; Delete erases a character; Ctrl+U clears the path.
 u removes the most recent exclusion, including a whole batch.
 c collapses consecutive dense seconds on the selected host, across all paths.
 Each second must exceed the threshold (default 100 events/s). No gaps are bridged.
+After each fold, c tries the next visible entry until it cannot collapse or reaches the end.
+An existing summary stops the sequence. Escape cancels further work, keeping completed folds.
 C edits the threshold. c or ENTER/F3 on a summary expands it.
 Other hosts remain visible. Tag edits keep unrelated folds closed.
 Collapsed groups are saved per tab and restored after restarting.
@@ -118,7 +120,10 @@ State is saved automatically. Sources are never modified.";
 
 #[derive(Clone, Copy)]
 enum Load {
-    DetectBurst,
+    DetectBurst {
+        automatic: bool,
+    },
+    Collapse(EventKey),
     FindJump(Jump),
     CenterJump(EventKey),
     Step {
@@ -366,19 +371,19 @@ impl App {
         let focus = self.selected().map(DisplayRow::key).or(self.view().top);
         vec![self.load(Load::Filter(focus), candidate, anchor, true)]
     }
-    fn load_around(&mut self, focus: EventKey, mut view: View) -> Action {
+    fn load_around(&mut self, mode: Load, focus: EventKey, mut view: View) -> Action {
         let context_before = self
             .view()
             .selected
             .max(self.height / 2)
             .min(self.height.saturating_sub(1));
         view.selected = context_before;
-        let Action::Page(mut request) =
-            self.load(Load::Filter(Some(focus)), Some(view), Some(focus), true)
-        else {
+        let Action::Page(mut request) = self.load(mode, Some(view), Some(focus), true) else {
             unreachable!()
         };
-        request.context_before = context_before;
+        // Reserve room for both the summary and the next entry, even when the
+        // terminal height exceeds the page limit.
+        request.context_before = context_before.min(request.limit.saturating_sub(2));
         Action::Page(request)
     }
     fn expand_burst(&mut self) -> Option<Action> {
@@ -388,7 +393,7 @@ impl App {
         let (first, origin) = (burst.first, burst.origin);
         let mut view = self.view().clone();
         view.bursts.retain(|burst| burst.first != first);
-        Some(self.load_around(origin, view))
+        Some(self.load_around(Load::Filter(Some(origin)), origin, view))
     }
     fn collapse_burst(&mut self) -> Vec<Action> {
         if self.pending.is_some() {
@@ -402,19 +407,25 @@ impl App {
             self.status = "No event selected".into();
             return vec![];
         };
+        vec![self.detect_burst(row.key, row.host.clone(), false)]
+    }
+    fn detect_burst(&mut self, origin: EventKey, host: String, automatic: bool) -> Action {
         let detection = BurstRequest {
-            origin: row.key,
-            host: row.host.clone(),
+            origin,
+            host,
             threshold: self.session.burst_threshold,
         };
-        let Action::Page(mut request) =
-            self.load(Load::DetectBurst, None, Some(detection.origin), true)
-        else {
+        let Action::Page(mut request) = self.load(
+            Load::DetectBurst { automatic },
+            None,
+            Some(detection.origin),
+            true,
+        ) else {
             unreachable!()
         };
         request.detect_burst = Some(detection);
         self.status = "Finding burst… (Escape cancels)".into();
-        vec![Action::Page(request)]
+        Action::Page(request)
     }
     fn remember(&mut self) {
         if let Some(key) = self.rows.get(self.top).map(|row| row.key()) {
@@ -721,7 +732,7 @@ impl App {
                     limit,
                     ..
                 } = pending;
-                if matches!(mode, Load::DetectBurst | Load::FindJump(_)) {
+                if matches!(mode, Load::DetectBurst { .. } | Load::FindJump(_)) {
                     return vec![];
                 }
                 if let Load::CenterJump(focus) = mode
@@ -769,7 +780,7 @@ impl App {
                     self.selected_records.clear();
                 }
                 match mode {
-                    Load::DetectBurst | Load::FindJump(_) => unreachable!(),
+                    Load::DetectBurst { .. } | Load::FindJump(_) => unreachable!(),
                     Load::CenterJump(focus) => {
                         self.remember();
                         self.previous = Some((self.session.active, self.view().clone()));
@@ -784,6 +795,7 @@ impl App {
                         self.view_mut().selected = index - self.top;
                     }
                     Load::Replace
+                    | Load::Collapse(_)
                     | Load::Filter(_)
                     | Load::FilterLast(_)
                     | Load::Last
@@ -802,7 +814,10 @@ impl App {
                         } else {
                             0
                         };
-                        if let Load::Filter(Some(focus)) | Load::FilterLast(Some(focus)) = mode {
+                        if let Load::Filter(Some(focus))
+                        | Load::FilterLast(Some(focus))
+                        | Load::Collapse(focus) = mode
+                        {
                             if self.rows.is_empty() {
                                 // Keep the event's key so undo can return here,
                                 // even though there is no visible row to remember.
@@ -892,6 +907,12 @@ impl App {
                     "Ready".into()
                 };
                 self.remember();
+                if let Load::Collapse(focus) = mode
+                    && let Some(index) = self.rows.iter().position(|row| row.key() == focus)
+                    && let Some(row) = self.rows.get(index + 1).and_then(DisplayRow::event)
+                {
+                    return vec![self.detect_burst(row.key, row.host.clone(), true)];
+                }
                 vec![]
             }
             Message::JumpTarget(generation, target) => {
@@ -938,17 +959,29 @@ impl App {
                 vec![Action::Page(request)]
             }
             Message::Burst(generation, burst) => {
-                if !self.pending.as_ref().is_some_and(|pending| {
-                    pending.generation == generation && matches!(pending.mode, Load::DetectBurst)
-                }) {
+                let Some(pending) = self
+                    .pending
+                    .as_ref()
+                    .filter(|pending| pending.generation == generation)
+                else {
                     return vec![];
-                }
+                };
+                let Load::DetectBurst { automatic } = pending.mode else {
+                    return vec![];
+                };
                 self.pending = None;
                 let Some(burst) = burst else {
-                    self.status = format!(
-                        "No burst here: each second must exceed {} events on this host (C changes threshold)",
-                        self.session.burst_threshold
-                    );
+                    self.status = if automatic {
+                        format!(
+                            "Stopped: next entry does not exceed {} events/s on its host (C changes threshold)",
+                            self.session.burst_threshold
+                        )
+                    } else {
+                        format!(
+                            "No burst here: each second must exceed {} events on this host (C changes threshold)",
+                            self.session.burst_threshold
+                        )
+                    };
                     return vec![];
                 };
                 let first = burst.first;
@@ -959,7 +992,7 @@ impl App {
                         || existing.first > burst.last
                 });
                 view.bursts.push(burst);
-                vec![self.load_around(first, view)]
+                vec![self.load_around(Load::Collapse(first), first, view)]
             }
             Message::Tagged(change) => self.tags_changed(&[change]),
             Message::TaggedMany(changes) => self.tags_changed(&changes),
