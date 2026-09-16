@@ -10,7 +10,7 @@
         source = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.unions [
-            ./Cargo.toml ./Cargo.lock ./src ./tests ./LICENSE
+            ./Cargo.toml ./Cargo.lock ./src ./tests ./examples ./LICENSE
           ];
         };
         app = pkgs.rustPlatform.buildRustPackage {

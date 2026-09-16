@@ -528,6 +528,7 @@ fn session_round_trip_preserves_independent_tabs_marks_and_location() {
             },
         }],
         timezone: "UTC".into(),
+        theme: timeliner_tui::theme::Theme::Dark,
     };
     store.save_session(&session).unwrap();
     let restored = store.session().unwrap();
@@ -535,6 +536,11 @@ fn session_round_trip_preserves_independent_tabs_marks_and_location() {
     assert!(restored.views[0].predicate.exclude.is_empty());
     assert_eq!(restored.views[1].predicate.exclude, ["/tmp"]);
     assert_eq!(restored.bookmarks[0].name, 'a');
+    assert_eq!(restored.theme, timeliner_tui::theme::Theme::Dark);
+    let mut legacy = serde_json::to_value(&session).unwrap();
+    legacy.as_object_mut().unwrap().remove("theme");
+    let legacy: Session = serde_json::from_value(legacy).unwrap();
+    assert_eq!(legacy.theme, timeliner_tui::theme::Theme::Light);
 }
 
 #[test]

@@ -106,6 +106,8 @@ pub struct Session {
     pub active: usize,
     pub bookmarks: Vec<Bookmark>,
     pub timezone: String,
+    #[serde(default)]
+    pub theme: crate::theme::Theme,
 }
 
 impl Default for Session {
@@ -115,6 +117,7 @@ impl Default for Session {
             active: 0,
             bookmarks: Vec::new(),
             timezone: "UTC".into(),
+            theme: crate::theme::Theme::default(),
         }
     }
 }

@@ -5,6 +5,7 @@ use crate::{
     query::{self, Cancellation},
     source::Input,
     store::Store,
+    theme::Theme,
 };
 use anyhow::Result;
 use chrono::TimeZone;
@@ -67,6 +68,7 @@ impl Workers {
         initial_rules: Option<Rules>,
         initial: Option<View>,
         timezone: Option<String>,
+        theme: Option<Theme>,
     ) -> Self {
         let (commands, rx) = mpsc::channel();
         let (pages, page_rx) = mpsc::channel::<PageRequest>();
@@ -132,6 +134,9 @@ impl Workers {
                 }
                 if let Some(timezone) = timezone {
                     session.timezone = timezone;
+                }
+                if let Some(theme) = theme {
+                    session.theme = theme;
                 }
                 let warnings = store.source_warnings()?.join(" · ");
                 tx.send(Message::Ready(session, warnings))?;

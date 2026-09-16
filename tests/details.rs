@@ -16,6 +16,7 @@ fn start(contents: &str) -> (TempDir, Workers) {
         Some(Rules::default()),
         None,
         None,
+        None,
     );
     loop {
         match workers

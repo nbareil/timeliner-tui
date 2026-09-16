@@ -19,7 +19,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Tabs, Wrap},
 };
 use std::{
     io::{self, IsTerminal},
@@ -27,6 +27,8 @@ use std::{
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
+
+mod render;
 
 const HELP: &str = "\
 TIMELINER TUI
@@ -40,6 +42,7 @@ Tags belong to source records, so all their MACB events agree.
 F1 Help   F2 Tags / reload IOC rules   F3 Details
 F4 Timeframe   F5 Filters   F6 Fork view   F7 Smart tabs
 F8 Bookmarks   F9 Export   F10 Quit
+F11 switches between light and dark themes.
 gt/gT switch tabs. Smart tabs start across the whole investigation.
 F7 also offers rename/close. F6 copies filters and location.
 
@@ -52,7 +55,7 @@ x excludes the selected pathname; X excludes its directory subtree.
 / opens the path filter editor. Exclusions are regular expressions.
 Filters use Rust regex syntax (no lookaround/backreferences).
 F2 → a restores automatic IOC assessment, including a cleared tag.
-Automatic IOC matches are yellow; the right column is the assessment.
+Automatic IOC matches have amber paths; the right column is the assessment.
 
 F9 exports all tagged records by default. Choose current for this view.
 Exports contain original bodyfile records and a .metadata.jsonl sidecar.
@@ -95,7 +98,7 @@ struct Form {
     error: String,
 }
 enum Modal {
-    Text(String, usize),
+    Text(&'static str, String, usize),
     Tags,
     Views,
     Marks,
@@ -274,7 +277,7 @@ impl App {
                 self.ready = true;
                 let action = self.load(Load::Replace, None, self.view().top, true);
                 if !warnings.is_empty() {
-                    self.modal = Some(Modal::Text(warnings, 0));
+                    self.modal = Some(Modal::Text("Source warnings", warnings, 0));
                 }
                 vec![action]
             }
@@ -378,7 +381,7 @@ impl App {
                 vec![]
             }
             Message::Detail(text) => {
-                self.modal = Some(Modal::Text(text, 0));
+                self.modal = Some(Modal::Text("Record inspector", text, 0));
                 vec![]
             }
             Message::Error(error) => {
@@ -571,9 +574,14 @@ impl App {
             self.prefix = None;
             return vec![];
         }
+        if key.code == KeyCode::F(11) && self.ready {
+            self.session.theme = self.session.theme.toggle();
+            self.dirty_session = true;
+            return vec![];
+        }
         if let Some(modal) = self.modal.take() {
             match modal {
-                Modal::Text(text, mut scroll) => {
+                Modal::Text(title, text, mut scroll) => {
                     match key.code {
                         KeyCode::Up | KeyCode::Char('k') => scroll = scroll.saturating_sub(1),
                         KeyCode::Down | KeyCode::Char('j') => {
@@ -585,7 +593,7 @@ impl App {
                         KeyCode::PageUp => scroll = scroll.saturating_sub(self.height),
                         _ => {}
                     }
-                    self.modal = Some(Modal::Text(text, scroll));
+                    self.modal = Some(Modal::Text(title, text, scroll));
                 }
                 Modal::Form(mut form) => {
                     match key.code {
@@ -688,7 +696,7 @@ impl App {
             return vec![];
         }
         if key.code == KeyCode::F(1) {
-            self.modal = Some(Modal::Text(HELP.into(), 0));
+            self.modal = Some(Modal::Text("Keyboard shortcuts", HELP.into(), 0));
             return vec![];
         }
         if !self.ready {
@@ -774,7 +782,7 @@ impl App {
                     return vec![Action::Command(Command::Detail(row.key.record, timezone))];
                 }
             }
-            KeyCode::F(1) => self.modal = Some(Modal::Text(HELP.into(), 0)),
+            KeyCode::F(1) => self.modal = Some(Modal::Text("Keyboard shortcuts", HELP.into(), 0)),
             KeyCode::F(2) => self.modal = Some(Modal::Tags),
             KeyCode::F(4) => self.form(FormKind::Time),
             KeyCode::F(5) | KeyCode::Char('/') => self.form(FormKind::Filters),
@@ -813,264 +821,6 @@ impl App {
         }
         vec![]
     }
-
-    fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
-        let active = self.session.active;
-        let block = Block::default()
-            .borders(Borders::BOTTOM)
-            .title_bottom(format!(
-                " Tab {}/{} · gt/gT switch · Timeliner ",
-                active + 1,
-                self.session.views.len()
-            ));
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        if inner.is_empty() {
-            return;
-        }
-        let columns = Layout::horizontal([
-            Constraint::Length(2),
-            Constraint::Fill(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        let titles = self
-            .session
-            .views
-            .iter()
-            .enumerate()
-            .map(|(index, view)| {
-                Line::from(format!(
-                    "{}{} {}",
-                    if index == active { "* " } else { "" },
-                    index + 1,
-                    display_text(&view.name)
-                ))
-            })
-            .collect::<Vec<_>>();
-        // Keep the selected title in view; reserve gutters for overflow arrows.
-        // Widths include the widget's one-cell padding on each side.
-        let capacity = columns[1].width as usize;
-        let mut start = active;
-        let mut end = active + 1;
-        let mut used = titles[active].width() + 2;
-        while start > 0 && used + titles[start - 1].width() + 3 <= capacity {
-            start -= 1;
-            used += titles[start].width() + 3;
-        }
-        while end < titles.len() && used + titles[end].width() + 3 <= capacity {
-            used += titles[end].width() + 3;
-            end += 1;
-        }
-        if start > 0 {
-            frame.render_widget(Paragraph::new("<"), columns[0]);
-        }
-        if end < titles.len() {
-            frame.render_widget(Paragraph::new(">").alignment(Alignment::Right), columns[2]);
-        }
-        frame.render_widget(
-            Tabs::new(titles[start..end].iter().cloned())
-                .select(active - start)
-                .highlight_style(
-                    Style::default()
-                        .bg(Color::Cyan)
-                        .fg(Color::Black)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            columns[1],
-        );
-    }
-
-    pub fn draw(&mut self, frame: &mut Frame) {
-        let area = frame.area();
-        let bar_height = if area.width < 110 { 2 } else { 1 };
-        let layout = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-            Constraint::Length(bar_height),
-        ])
-        .split(area);
-        self.height = layout[2].height.saturating_sub(1).max(1) as usize;
-        self.view_mut().selected = self.view().selected.min(self.height - 1);
-        self.draw_tabs(frame, layout[0]);
-        let tz: chrono_tz::Tz = self.session.timezone.parse().unwrap_or(chrono_tz::UTC);
-        let stamp = |e: Option<i64>| {
-            e.and_then(|e| tz.timestamp_opt(e, 0).single())
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_else(|| "unbounded".into())
-        };
-        let filters = format!(
-            "{} → {} [{}]  {}  include: {}  {} exclusions  hosts: {}",
-            stamp(self.view().after),
-            stamp(self.view().before),
-            tz,
-            macb(self.view().time_mask),
-            if self.view().predicate.include.is_empty() {
-                "all"
-            } else {
-                &self.view().predicate.include
-            },
-            self.view().predicate.exclude.len(),
-            if self.view().predicate.hosts.is_empty() {
-                "all".into()
-            } else {
-                self.view().predicate.hosts.join(",")
-            }
-        );
-        frame.render_widget(
-            Paragraph::new(display_text(&filters))
-                .style(Style::default().add_modifier(Modifier::BOLD))
-                .wrap(Wrap { trim: false }),
-            layout[1],
-        );
-        let body = layout[2];
-        let host_width = if area.width < 70 { 10 } else { 18 };
-        let widths = [
-            Constraint::Length(19),
-            Constraint::Length(host_width),
-            Constraint::Length(4),
-            Constraint::Min(1),
-            Constraint::Length(10),
-        ];
-        let header = Layout::horizontal(widths)
-            .spacing(1)
-            .split(Rect::new(body.x, body.y, body.width, 1));
-        for (rect, name) in header.iter().zip(["TIME", "HOST", "MACB", "PATH", "TAG"]) {
-            frame.render_widget(
-                Paragraph::new(name)
-                    .style(Style::default().fg(Color::Black).bg(Color::Gray))
-                    .alignment(if name == "TAG" {
-                        Alignment::Right
-                    } else {
-                        Alignment::Left
-                    }),
-                *rect,
-            );
-        }
-        for (slot, row) in self
-            .rows
-            .iter()
-            .skip(self.top)
-            .take(self.height)
-            .enumerate()
-        {
-            let rect = Rect::new(body.x, body.y + 1 + slot as u16, body.width, 1);
-            let selected = slot == self.view().selected;
-            let base = if selected {
-                Style::default()
-                    .bg(Color::Blue)
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
-            } else if row.ioc_match {
-                Style::default().fg(Color::Yellow).bg(Color::Black)
-            } else {
-                // Let the terminal supply a readable foreground on light and dark themes.
-                Style::default()
-            };
-            frame.render_widget(Paragraph::new("").style(base), rect);
-            let columns = Layout::horizontal(widths).spacing(1).split(rect);
-            let timestamp = tz
-                .timestamp_opt(row.key.epoch, 0)
-                .single()
-                .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-                .unwrap_or_else(|| row.key.epoch.to_string());
-            for (cell, text) in columns[..4].iter().zip([
-                timestamp,
-                display_text(&row.host),
-                macb(row.macb),
-                display_text(&row.path),
-            ]) {
-                frame.render_widget(Paragraph::new(text).style(base), *cell);
-            }
-            let tag_style = match row.tag {
-                Tag::None => base,
-                Tag::Suspicious => base.fg(Color::Black).bg(Color::Yellow),
-                Tag::Ioc => base.fg(Color::Black).bg(Color::Magenta),
-                Tag::Malicious => base.fg(Color::White).bg(Color::Red),
-            };
-            frame.render_widget(
-                Paragraph::new(row.tag.label())
-                    .alignment(Alignment::Right)
-                    .style(tag_style.add_modifier(Modifier::BOLD)),
-                columns[4],
-            );
-        }
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::from(display_text(&self.status)),
-                Line::from("↑↓ scroll  j/k select  TAB tag  ENTER details  gt/gT tabs  Esc cancel"),
-            ]),
-            layout[3],
-        );
-        let labels = [
-            "F1 Help",
-            "F2 Tags",
-            "F3 Detail",
-            "F4 Time",
-            "F5 Filter",
-            "F6 Fork",
-            "F7 Views",
-            "F8 Marks",
-            "F9 Export",
-            "F10 Quit",
-        ];
-        let rows = if bar_height == 2 {
-            vec![labels[..5].join("  "), labels[5..].join("  ")]
-        } else {
-            vec![labels.join("  ")]
-        };
-        frame.render_widget(
-            Paragraph::new(rows.into_iter().map(Line::from).collect::<Vec<_>>())
-                .style(Style::default().bg(Color::Cyan).fg(Color::Black)),
-            layout[4],
-        );
-        if let Some(modal) = &self.modal {
-            let popup = Rect::new(
-                area.x + area.width / 20,
-                area.y + 1,
-                area.width - area.width / 10,
-                area.height.saturating_sub(2),
-            );
-            frame.render_widget(Clear, popup);
-            let block = Block::default().borders(Borders::ALL).title(" Esc closes ");
-            let inner = block.inner(popup);
-            frame.render_widget(
-                block.style(Style::default().bg(Color::Black).fg(Color::Cyan)),
-                popup,
-            );
-            match modal {
-                Modal::Text(text,scroll)=>{
-                    let safe=text.lines().map(display_text).collect::<Vec<_>>().join("\n");
-                    let paragraph=Paragraph::new(safe).wrap(Wrap {trim:false});
-                    self.detail_scroll_max=paragraph.line_count(inner.width).saturating_sub(inner.height as usize);
-                    frame.render_widget(paragraph.scroll(((*scroll).min(self.detail_scroll_max).min(u16::MAX as usize) as u16,0)),inner);
-                }
-                Modal::Tags=>frame.render_widget(Paragraph::new("TAG ASSESSMENT\n\n0 Clear tag (manual)\n1 SUSPICIOUS\n2 IOC\n3 MALICIOUS\na Reset to automatic IOC assessment\nr Reload IOC YAML\n\nTAB in the timeline cycles tags on the entire record."),inner),
-                Modal::Views=>frame.render_widget(Paragraph::new("SMART TABS — WHOLE INVESTIGATION\n\n1 All tagged\n2 SUSPICIOUS\n3 IOC\n4 MALICIOUS\n\nn Rename current tab\nx Close current tab\n\nF6 forks the current filters. gt/gT switches tabs."),inner),
-                Modal::Marks=>{
-                    let mut text="BOOKMARKS\n\nType a letter to jump; d then a letter deletes.\nSet with ma … mz in the timeline.\n\n".to_string();
-                    for mark in &self.session.bookmarks {text.push_str(&format!("{}  epoch {}  record {}\n",mark.name,mark.key.epoch,mark.key.record));}
-                    frame.render_widget(Paragraph::new(text).wrap(Wrap{trim:false}),inner);
-                }
-                Modal::Form(form)=>{
-                    let visible=(inner.height.saturating_sub(3) as usize/2).max(1);
-                    let start=form.active.saturating_sub(visible-1);
-                    let mut lines=Vec::new();
-                    for (i,(label,value)) in form.fields.iter().enumerate().skip(start).take(visible) {
-                        lines.push(Line::from(Span::styled(label.clone(),Style::default().fg(Color::Gray))));
-                        lines.push(Line::from(Span::styled(format!("{} {}",if i==form.active {">"} else {" "},display_text(value)),
-                            if i==form.active {Style::default().bg(Color::Blue).fg(Color::White)} else {Style::default()})));
-                    }
-                    lines.push(Line::from("Tab next · Shift+Tab previous · Ctrl+U clear · Enter apply"));
-                    if form.kind==FormKind::Filters {lines.push(Line::from("F2 adds an exclusion regex"));}
-                    lines.push(Line::from(Span::styled(form.error.clone(),Style::default().fg(Color::Red))));
-                    frame.render_widget(Paragraph::new(lines),inner);
-                }
-            }
-        }
-    }
 }
 
 fn expand_home(value: &str) -> PathBuf {
@@ -1088,7 +838,7 @@ impl Drop for TerminalGuard {
         let _ = execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
     }
 }
-pub fn run(workers: &Workers) -> Result<()> {
+pub fn run(workers: &Workers, theme: crate::theme::Theme) -> Result<()> {
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         bail!("The TUI requires a terminal; use --index-only for noninteractive indexing");
     }
@@ -1103,6 +853,7 @@ pub fn run(workers: &Workers) -> Result<()> {
     }));
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     let mut app = App::default();
+    app.session.theme = theme;
     let mut dirty = true;
     let mut saved = Instant::now();
     loop {

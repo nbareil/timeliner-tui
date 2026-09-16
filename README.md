@@ -46,10 +46,29 @@ Without `--workspace`, the application chooses a stable directory under
 rules are saved automatically. Only one application may open a workspace at a
 time.
 
+## Appearance
+
+The interface uses 24-bit RGB colors with coordinated light and dark palettes.
+Light is the default. Press **F11** to switch themes, including inside dialogs;
+the choice is saved with the workspace. Override it at launch with
+`--theme light` or `--theme dark`.
+
+Hosts have stable accent colors, MACB flags have distinct colors, and assessment
+badges use amber, violet, and rose. Subtle row shading, an accent selection marker,
+and explicit foreground/background pairs keep the timeline readable. Dialogs
+use rounded borders, focused input fields, and a separate surface color.
+No special icon font is required.
+
+Previews below use synthetic records rendered by the actual UI:
+
+![Light theme](docs/images/light.png)
+
+![Dark theme](docs/images/dark.png)
+
 ## Navigation and assessment
 
 The timeline shows timestamp, hostname, MACB flags, pathname, and a tag column at
-the right edge. Yellow paths identify IOC rule matches; the tag column shows the
+the right edge. Amber paths identify IOC rule matches; the tag column shows the
 current assessment. ENTER opens the full pathname, all 11 fields, source line and
 byte offset, original record, and matching rules.
 
@@ -71,6 +90,7 @@ byte offset, original record, and matching rules.
 | F8 | Bookmark list |
 | F9 | Export |
 | F10 / Ctrl+C | Quit |
+| F11 | Switch light/dark theme |
 | x / X | Exclude the selected pathname / directory subtree |
 | D | Malformed-record diagnostics |
 | Escape | Close a dialog or cancel pending work |
@@ -83,7 +103,7 @@ Forking copies the current filters and location. The new tab is independent.
 Smart tabs—All tagged, SUSPICIOUS, IOC, and MALICIOUS—start across the whole
 investigation and update when tags change.
 
-The header shows numbered tabs, marks the active tab with `*`, and displays its
+The header shows numbered tabs, marks the active tab with `●`, and displays its
 position (for example, `Tab 2/4`). Use `gt`/`gT` to switch. When titles exceed the
 screen width, `<` and `>` indicate hidden tabs; the active tab stays visible.
 
@@ -214,6 +234,9 @@ Clippy checks.
 
 Source modules separate bodyfile parsing, IOC rules, source access, SQLite
 storage, indexed queries, export, background workers, and the terminal UI.
+`src/theme.rs` defines the palettes; `src/ui/render.rs` handles presentation.
+`cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
+timeline data; append `details`, `filters`, `tags`, or `views` to preview dialogs.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 

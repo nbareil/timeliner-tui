@@ -26,6 +26,9 @@ struct Cli {
     before: Option<String>,
     #[arg(long)]
     tz: Option<chrono_tz::Tz>,
+    /// True-color appearance; F11 switches themes in the interface.
+    #[arg(long, value_enum)]
+    theme: Option<timeliner_tui::theme::Theme>,
     /// Override a source's hostname: --host SOURCE HOST (repeatable).
     #[arg(long, num_args = 2, value_names = ["SOURCE", "HOST"])]
     host: Vec<String>,
@@ -103,6 +106,7 @@ fn main() -> Result<()> {
     });
     let rules = ioc_path.as_deref().map(Rules::load).transpose()?;
     let session = store.session()?;
+    let theme = cli.theme.unwrap_or(session.theme);
     let tz = cli.tz.unwrap_or(session.timezone.parse()?);
     let initial = if cli.after.is_some() || cli.before.is_some() {
         let mut view = session
@@ -130,6 +134,7 @@ fn main() -> Result<()> {
         rules,
         initial,
         cli.tz.map(|tz| tz.to_string()),
+        cli.theme,
     );
     if cli.index_only {
         loop {
@@ -154,7 +159,7 @@ fn main() -> Result<()> {
         }
         workers.shutdown();
     } else {
-        let result = ui::run(&workers);
+        let result = ui::run(&workers, theme);
         workers.shutdown();
         result?;
     }

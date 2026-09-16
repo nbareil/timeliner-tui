@@ -21,6 +21,7 @@ fn cli_indexes_resumes_and_reports_uac_sources() {
         .arg(&workspace)
         .arg("--ioc-file")
         .arg(&rules)
+        .args(["--theme", "dark"])
         .arg(&uac)
         .output()
         .unwrap();
@@ -46,6 +47,11 @@ fn cli_indexes_resumes_and_reports_uac_sources() {
         .output()
         .unwrap();
     assert!(resumed.status.success());
+    let store = timeliner_tui::store::Store::reader(&workspace).unwrap();
+    assert_eq!(
+        store.session().unwrap().theme,
+        timeliner_tui::theme::Theme::Dark
+    );
 }
 
 #[test]

@@ -105,23 +105,23 @@ fn tab_names_active_marker_and_position_remain_visible_when_switching() {
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let buffer = terminal.backend().buffer();
         let tabs = (0..120)
-            .map(|x| buffer[(x, 0)].symbol())
+            .map(|x| buffer[(x, 1)].symbol())
             .collect::<String>();
         let position = (0..120)
-            .map(|x| buffer[(x, 1)].symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         for title in ["1 Timeline", "2 IOC", "3 Malicious"] {
             assert!(tabs.contains(title), "{tabs}");
         }
-        assert!(tabs.contains(&format!("* {}", active + 1)), "{tabs}");
+        assert!(tabs.contains(&format!("● {}", active + 1)), "{tabs}");
         assert!(
             position.contains(&format!("Tab {}/3", active + 1)),
             "{position}"
         );
         assert!(position.contains("gt/gT switch"), "{position}");
-        let marker = (0..120).find(|&x| buffer[(x, 0)].symbol() == "*").unwrap();
-        assert_eq!(buffer[(marker, 0)].bg, Color::Cyan);
-        assert_eq!(buffer[(marker, 0)].fg, Color::Black);
+        let marker = (0..120).find(|&x| buffer[(x, 1)].symbol() == "●").unwrap();
+        assert_eq!(buffer[(marker, 1)].bg, app.session.theme.palette().selected);
+        assert_eq!(buffer[(marker, 1)].fg, app.session.theme.palette().accent);
         key(&mut app, KeyCode::Char('g'));
         key(&mut app, KeyCode::Char('t'));
     }
@@ -144,10 +144,10 @@ fn overflowing_tabs_keep_the_active_tab_visible_and_signal_hidden_neighbors() {
         app.session.active = active;
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let buffer = terminal.backend().buffer();
-        let tabs = (0..40).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        let position = (0..40).map(|x| buffer[(x, 1)].symbol()).collect::<String>();
+        let tabs = (0..40).map(|x| buffer[(x, 1)].symbol()).collect::<String>();
+        let position = (0..40).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(
-            tabs.contains(&format!("* {} Host-{}", active + 1, active + 1)),
+            tabs.contains(&format!("● {} Host-{}", active + 1, active + 1)),
             "{tabs}"
         );
         assert_eq!(tabs.starts_with('<'), hidden_left, "{tabs}");
@@ -179,13 +179,13 @@ fn long_unicode_tab_names_do_not_hide_the_active_tab_after_resize() {
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let buffer = terminal.backend().buffer();
         let tabs = (0..width)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
-        let position = (0..width)
             .map(|x| buffer[(x, 1)].symbol())
             .collect::<String>();
+        let position = (0..width)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>();
         // Wide characters occupy a second buffer cell whose symbol is a space.
-        assert!(tabs.replace(' ', "").contains("*2調査"), "{tabs}");
+        assert!(tabs.replace(' ', "").contains("●2調査"), "{tabs}");
         assert!(tabs.starts_with('<'), "{tabs}");
         assert!(tabs.ends_with('>'), "{tabs}");
         assert!(position.contains("Tab 2/3"), "{position}");
@@ -220,6 +220,7 @@ fn tag_is_right_aligned_and_keys_survive_standard_terminal_resize() {
             .iter()
             .map(|c| c.symbol())
             .collect::<String>();
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(text.contains("F1 Help"));
         assert!(text.contains("F10 Quit"));
     }
@@ -247,16 +248,43 @@ fn timeline_fills_the_available_height_with_distinct_rows() {
 }
 
 #[test]
-fn ordinary_rows_filters_and_status_use_the_terminal_default_colors() {
+fn both_themes_keep_ordinary_rows_and_status_readable() {
     let mut app = app();
-    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    terminal.draw(|frame| app.draw(frame)).unwrap();
-    let buffer = terminal.backend().buffer();
-    for (x, y) in [(0, 2), (0, 6), (20, 6), (44, 6), (0, 27), (0, 28)] {
-        let cell = &buffer[(x, y)];
-        assert_eq!(cell.fg, Color::Reset, "foreground at ({x}, {y})");
-        assert_eq!(cell.bg, Color::Reset, "background at ({x}, {y})");
+    for theme in [
+        timeliner_tui::theme::Theme::Light,
+        timeliner_tui::theme::Theme::Dark,
+    ] {
+        app.session.theme = theme;
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        for (x, y) in [(2, 5), (2, 6), (22, 6), (47, 6), (4, 27), (5, 28)] {
+            let cell = &buffer[(x, y)];
+            assert!(
+                contrast(cell.fg, cell.bg) >= 4.5,
+                "{theme:?} at ({x}, {y}): {cell:?}"
+            );
+        }
     }
+}
+
+fn contrast(fg: Color, bg: Color) -> f64 {
+    let luminance = |color| {
+        let Color::Rgb(r, g, b) = color else {
+            panic!("Theme must explicitly set both RGB colors")
+        };
+        let linear = |channel: u8| {
+            let value = f64::from(channel) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+    };
+    let (a, b) = (luminance(fg), luminance(bg));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
 }
 
 #[test]
@@ -266,14 +294,69 @@ fn ioc_highlights_and_tags_have_explicit_contrasting_backgrounds() {
     app.rows[2].tag = Tag::Suspicious;
     app.rows[3].tag = Tag::Ioc;
     app.rows[4].tag = Tag::Malicious;
+    for theme in [
+        timeliner_tui::theme::Theme::Light,
+        timeliner_tui::theme::Theme::Dark,
+    ] {
+        app.session.theme = theme;
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        for (x, y) in [(47, 5), (47, 6), (119, 7), (119, 8), (119, 9)] {
+            let cell = &buffer[(x, y)];
+            assert!(
+                contrast(cell.fg, cell.bg) >= 4.5,
+                "{theme:?} at ({x}, {y}): {cell:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn theme_toggle_preserves_the_investigation_and_works_inside_dialogs() {
+    let mut app = app();
+    app.session.views[0].predicate.include = "file".into();
+    app.session.views[0].selected = 4;
+    key(&mut app, KeyCode::F(3));
+    app.message(timeliner_tui::worker::Message::Detail(
+        "Path: /sample".into(),
+    ));
+    key(&mut app, KeyCode::F(11));
+    assert_eq!(app.session.theme, timeliner_tui::theme::Theme::Dark);
+    assert_eq!(app.session.views[0].predicate.include, "file");
+    assert_eq!(app.session.views[0].selected, 4);
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
-    let buffer = terminal.backend().buffer();
-    for (x, y) in [(44, 5), (44, 6), (119, 7), (119, 8), (119, 9)] {
-        let cell = &buffer[(x, y)];
-        assert_ne!(cell.fg, Color::Reset, "foreground at ({x}, {y})");
-        assert_ne!(cell.bg, Color::Reset, "background at ({x}, {y})");
-        assert_ne!(cell.fg, cell.bg, "contrast at ({x}, {y})");
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect::<String>();
+    assert!(text.contains("Record inspector"));
+    assert!(text.contains("/sample"));
+    key(&mut app, KeyCode::F(11));
+    assert_eq!(app.session.theme, timeliner_tui::theme::Theme::Light);
+}
+
+#[test]
+fn dialogs_survive_compact_terminal_sizes_in_both_themes() {
+    for theme in [
+        timeliner_tui::theme::Theme::Light,
+        timeliner_tui::theme::Theme::Dark,
+    ] {
+        for (width, height) in [(80, 24), (60, 12), (30, 8), (1, 1)] {
+            let mut app = app();
+            app.session.theme = theme;
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            for function in [1, 2, 4, 5, 7, 8, 9] {
+                key(&mut app, KeyCode::F(function));
+                terminal.draw(|frame| app.draw(frame)).unwrap();
+                key(&mut app, KeyCode::Esc);
+            }
+        }
     }
 }
 #[test]
