@@ -69,6 +69,25 @@ Import already streams bounded batches, and the UI draws only when marked dirty.
 Normal timeline rendering uses visible rows. No import, export, or rendering
 speedup is claimed here.
 
+## Session resume follow-up: 2026-09-17
+
+The initial audit missed a sparse saved-view workload: a few matching rows at
+the saved position followed by a long excluded interval. Startup waited to fill
+the entire prefetch buffer before displaying those available rows.
+
+Ordinary browsing now returns a partial page after checking 4,096 candidates
+when an event or fold summary is available. The UI keeps scrolling enabled past
+a partial page, and summaries beyond the scanned interval wait until that
+interval has been searched. Empty searches and navigation requiring complete
+context continue until they find their destination or exhaust the range.
+Raw queries and exports still retrieve complete pages.
+
+A read-only check of the reported workspace using debug code returned its nine
+initial rows after 4,096 candidates in 52 ms. Refreshing its saved folds took
+381 ms separately. This was one local measurement, not an end-to-end terminal
+benchmark. Regression tests exercise reopening, both cursor directions, later
+matches across excluded gaps, and partial pages containing saved folds.
+
 ## Validation and limits
 
 Validation used the pinned Nix development environment:
@@ -81,8 +100,11 @@ nix develop . --command cargo build --release --locked --offline
 python3 tests/support/tmux_mouse.py target/release/timeliner-tui
 ```
 
-All 212 tests passed, as did formatting, Clippy, the release build, and the tmux
-integration check.
+At the initial audit, all 212 tests passed, as did formatting, Clippy, the release
+build, and the tmux integration check.
+
+For the session-resume fix, all 216 tests passed, along with formatting, Clippy,
+the debug build, and the tmux check using `target/debug/timeliner-tui`.
 
 The measurements use local synthetic data and warm filesystem caches. Sparse
 search remains proportional to the candidates examined. Cold storage, dense

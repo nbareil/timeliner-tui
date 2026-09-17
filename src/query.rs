@@ -265,7 +265,13 @@ pub fn page(
     cancel: &Cancellation,
     progress: impl FnMut(u64),
 ) -> Result<Vec<Row>> {
-    page_omitting(store, view, page, &[], cancel, progress)
+    Ok(page_omitting(store, view, page, &[], None, cancel, progress)?.rows)
+}
+
+pub(crate) struct PageRows<T> {
+    pub rows: Vec<T>,
+    /// A bounded scan stopped here with potentially more matching rows ahead.
+    pub continuation: Option<EventKey>,
 }
 
 /// Folded display pages may omit events; raw queries and exports never do.
@@ -274,9 +280,10 @@ pub(crate) fn page_omitting(
     view: &View,
     page: Page,
     bursts: &[Burst],
+    scan_budget: Option<u64>,
     cancel: &Cancellation,
     mut progress: impl FnMut(u64),
-) -> Result<Vec<Row>> {
+) -> Result<PageRows<Row>> {
     let Page {
         anchor,
         reverse,
@@ -287,7 +294,10 @@ pub(crate) fn page_omitting(
     cancel.check()?;
     let limit = limit.min(4096);
     if limit == 0 {
-        return Ok(Vec::new());
+        return Ok(PageRows {
+            rows: Vec::new(),
+            continuation: None,
+        });
     }
     let matcher = Matcher::new(&view.predicate)?;
     let path = cache(store, &view.predicate, cancel, &mut progress)?;
@@ -328,9 +338,18 @@ pub(crate) fn page_omitting(
             lower = if inclusive { ">=" } else { ">" };
         }
     }
+    let summaries = bursts.iter().map(|burst| burst.first).filter(|&key| {
+        key >= lo && key <= hi && (key != lo || lower == ">=") && (key != hi || upper == "<=")
+    });
+    let first_summary = if reverse {
+        summaries.max()
+    } else {
+        summaries.min()
+    };
     let mut result = Vec::with_capacity(limit);
     let mut legacy_metadata = HashMap::new();
     let mut checked = 0_u64;
+    let mut continuation = None;
     loop {
         cancel.check()?;
         let sql = cursor_sql(reverse, lower, upper, cache_db.is_some());
@@ -403,6 +422,22 @@ pub(crate) fn page_omitting(
                     break;
                 }
             }
+            // Publish usable rows before a sparse filter scans the rest of the
+            // investigation merely to fill the prefetch buffer. Empty searches
+            // still continue until a row/summary is found or the range is exhausted.
+            if scan_budget.is_some_and(|budget| checked >= budget)
+                && (!result.is_empty()
+                    || first_summary.is_some_and(|summary| {
+                        if reverse {
+                            summary >= key
+                        } else {
+                            summary <= key
+                        }
+                    }))
+            {
+                continuation = Some(key);
+                break;
+            }
         }
         let Some(last) = skipped_to else {
             break;
@@ -420,7 +455,10 @@ pub(crate) fn page_omitting(
     if reverse {
         result.reverse();
     }
-    Ok(result)
+    Ok(PageRows {
+        rows: result,
+        continuation,
+    })
 }
 
 fn cursor_sql(reverse: bool, lower: &str, upper: &str, cached: bool) -> String {

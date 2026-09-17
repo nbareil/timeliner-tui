@@ -2,7 +2,7 @@
 //! Detection streams records; display pagination retains only fold descriptors.
 use crate::{
     model::{Burst, DisplayRow, EventKey, Tag, TagChange, View, validate_view},
-    query::{self, Cancellation, Matcher, Page, ResetCancellation},
+    query::{self, Cancellation, Matcher, Page, PageRows, ResetCancellation},
     store::Store,
 };
 use anyhow::Result;
@@ -255,10 +255,39 @@ pub fn page(
     cancel: &Cancellation,
     progress: impl FnMut(u64),
 ) -> Result<Vec<DisplayRow>> {
-    let mut rows: Vec<_> = query::page_omitting(store, view, page, &view.bursts, cancel, progress)?
-        .into_iter()
-        .map(DisplayRow::Event)
-        .collect();
+    Ok(page_scanning(store, view, page, None, cancel, progress)?.rows)
+}
+
+/// Interactive browsing can show a short page without declaring the timeline
+/// exhausted. Context-sensitive navigation and exports keep requesting full pages.
+pub(crate) fn page_bounded(
+    store: &Store,
+    view: &View,
+    page: Page,
+    cancel: &Cancellation,
+    progress: impl FnMut(u64),
+) -> Result<PageRows<DisplayRow>> {
+    page_scanning(store, view, page, Some(4096), cancel, progress)
+}
+
+fn page_scanning(
+    store: &Store,
+    view: &View,
+    page: Page,
+    scan_budget: Option<u64>,
+    cancel: &Cancellation,
+    progress: impl FnMut(u64),
+) -> Result<PageRows<DisplayRow>> {
+    let scanned = query::page_omitting(
+        store,
+        view,
+        page,
+        &view.bursts,
+        scan_budget,
+        cancel,
+        progress,
+    )?;
+    let mut rows: Vec<_> = scanned.rows.into_iter().map(DisplayRow::Event).collect();
     for burst in &view.bursts {
         let key = burst.first;
         let within_page = page.anchor.is_none_or(|anchor| {
@@ -268,7 +297,16 @@ pub fn page(
                 key > anchor || (page.inclusive && key == anchor)
             }
         });
-        if within_page {
+        // Do not insert a future summary ahead of matching events in a part of
+        // the timeline that this partial scan has not reached yet.
+        let reached = scanned.continuation.is_none_or(|last| {
+            if page.reverse {
+                key >= last
+            } else {
+                key <= last
+            }
+        });
+        if within_page && reached {
             rows.push(DisplayRow::Burst(burst.clone()));
         }
     }
@@ -281,7 +319,10 @@ pub fn page(
         rows.reverse();
     }
     cancel.check()?;
-    Ok(rows)
+    Ok(PageRows {
+        rows,
+        continuation: scanned.continuation,
+    })
 }
 
 /// Keep earlier display rows available when replacing a page around a fold.

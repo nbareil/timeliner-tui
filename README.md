@@ -393,9 +393,14 @@ moves to the next remaining event, or the preceding event at the end of the
 timeline. Undo also restores your place after a filter produces no matches.
 
 Searches run in the background and Escape cancels them. A very restrictive
-filter can still require searching much of the selected timeframe to fill a
-page or establish that there are no matches. Tag views reuse a separate tag
-index; changing path or host filters does not rebuild it.
+filter can still require searching much of the selected timeframe to find a
+matching row or establish that there are no matches. Tag views reuse a separate
+tag index; changing path or host filters does not rebuild it.
+
+Reopening a saved view and ordinary scrolling show available rows after a
+bounded scan, even if the prefetch buffer is not full. A short page does not
+mean the timeline has ended: scrolling requests the next matches. A large
+excluded gap can still take time to cross when no matching row is available.
 
 ## UAC and hostnames
 

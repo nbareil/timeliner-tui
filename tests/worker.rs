@@ -30,6 +30,7 @@ fn request(workers: &Workers, view: View, generation: u64) {
             inclusive: false,
             limit: 10,
             context_before: 0,
+            allow_partial: false,
             detect_burst: None,
             jump: None,
         })

@@ -489,6 +489,14 @@ impl App {
             inclusive,
             limit,
             context_before: 0,
+            allow_partial: matches!(
+                mode,
+                Load::Replace
+                    | Load::Before { .. }
+                    | Load::After { .. }
+                    | Load::Step { .. }
+                    | Load::Last
+            ),
             detect_burst: None,
             jump: None,
         })
@@ -754,6 +762,7 @@ impl App {
         }
     }
     pub fn message(&mut self, message: Message) -> Vec<Action> {
+        let complete = !matches!(&message, Message::PartialPage(..));
         match message {
             Message::Ready(mut session, warnings) => {
                 if session.views.is_empty() {
@@ -769,7 +778,7 @@ impl App {
                 }
                 vec![action]
             }
-            Message::Page(generation, mut rows) => {
+            Message::Page(generation, mut rows) | Message::PartialPage(generation, mut rows) => {
                 let Some(pending) = self.pending.take() else {
                     return vec![];
                 };
@@ -844,8 +853,8 @@ impl App {
                             *self.view_mut() = view;
                         }
                         let index = rows.partition_point(|row| row.key() < focus);
-                        self.end_before = index < limit / 2;
-                        self.end_after = rows.len() < limit;
+                        self.end_before = complete && index < limit / 2;
+                        self.end_after = complete && rows.len() < limit;
                         self.rows = rows;
                         self.top = index.saturating_sub(RowPosition::Middle.slot(self.height));
                         self.view_mut().selected = index - self.top;
@@ -867,8 +876,8 @@ impl App {
                         let last = matches!(mode, Load::Last | Load::FilterLast(_));
                         self.end_before = (anchor.is_none()
                             && matches!(mode, Load::Replace | Load::Filter(_) | Load::TaggedBurst))
-                            || (last && rows.len() < limit);
-                        self.end_after = rows.len() < limit || last;
+                            || (last && complete && rows.len() < limit);
+                        self.end_after = (complete && rows.len() < limit) || last;
                         self.rows = rows;
                         self.top = if last {
                             self.rows.len().saturating_sub(self.height)
@@ -902,7 +911,7 @@ impl App {
                     Load::After { .. }
                     | Load::Reposition { reverse: false, .. }
                     | Load::Step { reverse: false } => {
-                        self.end_after = rows.len() < limit;
+                        self.end_after = complete && rows.len() < limit;
                         let added = rows.len();
                         self.rows.append(&mut rows);
                         if let Load::After { delta, keep_event } = mode {
@@ -928,7 +937,7 @@ impl App {
                     Load::Before { .. }
                     | Load::Reposition { reverse: true, .. }
                     | Load::Step { reverse: true } => {
-                        self.end_before = rows.len() < limit;
+                        self.end_before = complete && rows.len() < limit;
                         let added = rows.len();
                         rows.append(&mut self.rows);
                         self.rows = rows;

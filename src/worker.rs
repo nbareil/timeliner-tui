@@ -34,6 +34,8 @@ pub struct PageRequest {
     pub inclusive: bool,
     pub limit: usize,
     pub context_before: usize,
+    /// Return available rows before sparse filters fill the prefetch buffer.
+    pub allow_partial: bool,
     pub detect_burst: Option<BurstRequest>,
     pub jump: Option<Jump>,
 }
@@ -60,6 +62,7 @@ pub enum Command {
 pub enum Message {
     Ready(Session, String),
     Page(u64, Vec<DisplayRow>),
+    PartialPage(u64, Vec<DisplayRow>),
     Burst(u64, Option<Burst>),
     JumpTarget(u64, Option<Row>),
     Progress(u64, String),
@@ -433,25 +436,36 @@ impl Workers {
                         )?;
                         return Ok(Message::Burst(request.generation, found));
                     }
+                    let page = query::Page {
+                        anchor: request.anchor,
+                        reverse: request.reverse,
+                        inclusive: request.inclusive,
+                        limit: request.limit,
+                    };
+                    let progress = |count: u64| {
+                        if count.is_multiple_of(65536) {
+                            let _ = messages_tx.send(Message::Progress(
+                                request.generation,
+                                format!("Searching: {count} candidates checked"),
+                            ));
+                        }
+                    };
+                    if request.allow_partial && request.context_before == 0 {
+                        let batch =
+                            burst::page_bounded(store, &request.view, page, &cancel, progress)?;
+                        return Ok(if batch.continuation.is_some() {
+                            Message::PartialPage(request.generation, batch.rows)
+                        } else {
+                            Message::Page(request.generation, batch.rows)
+                        });
+                    }
                     let rows = burst::page_with_context(
                         store,
                         &request.view,
-                        query::Page {
-                            anchor: request.anchor,
-                            reverse: request.reverse,
-                            inclusive: request.inclusive,
-                            limit: request.limit,
-                        },
+                        page,
                         request.context_before,
                         &cancel,
-                        |count| {
-                            if count % 65536 == 0 {
-                                let _ = messages_tx.send(Message::Progress(
-                                    request.generation,
-                                    format!("Searching: {count} candidates checked"),
-                                ));
-                            }
-                        },
+                        progress,
                     )?;
                     Ok(Message::Page(request.generation, rows))
                 })();
