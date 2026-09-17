@@ -398,9 +398,12 @@ matching row or establish that there are no matches. Tag views reuse a separate
 tag index; changing path or host filters does not rebuild it.
 
 Reopening a saved view and ordinary scrolling show available rows after a
-bounded scan, even if the prefetch buffer is not full. A short page does not
-mean the timeline has ended: scrolling requests the next matches. A large
-excluded gap can still take time to cross when no matching row is available.
+bounded scan, then load any missing screen rows in the background. The selection
+stays on the same event, and shown rows remain usable while the screen fills.
+Loading stops when the visible screen is full or the timeline ends; Escape stops
+it earlier. A short page does not mean the timeline has ended: scrolling
+requests the next matches. A large excluded gap can still take time to cross.
+See the [screen-fill terminal capture](docs/images/screen-fill.txt).
 
 ## UAC and hostnames
 

@@ -1,0 +1,61 @@
+Initial partial page: visible rows stay usable while background loading continues
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   1 exclusions   F5 edit
+   TIMESTAMP           HOST               MACB PATH                                       ASSESSMENT
+   2025-06-15 15:06:41 example-host       macb /keep/file-01
+   2025-06-15 15:06:42 example-host       macb /keep/file-02
+   2025-06-15 15:06:43 example-host       macb /keep/file-03
+   2025-06-15 15:06:44 example-host       macb /keep/file-04
+▌  2025-06-15 15:06:45 example-host       macb /keep/file-05
+   2025-06-15 15:06:46 example-host       macb /keep/file-06
+   2025-06-15 15:06:47 example-host       macb /keep/file-07
+   2025-06-15 15:06:48 example-host       macb /keep/file-08
+   2025-06-15 15:06:49 example-host       macb /keep/file-09
+
+
+
+
+
+
+
+
+
+
+
+  ◌ Loading visible rows… (Escape cancels)
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C t
+ F1  Help            F2  Tags            F3  Detail          F4  Time            F5  Filter
+ F6  Fork            F7  Views           F8  Marks           F9  Export          q  Quit
+
+Background loading completes: all 20 screen rows are filled, with the same event selected
+  ◆ TIMELINER        Tab 1/2  1–9 select · gt/gT switch                F10  Mouse on     F11  Light
+   ● 1 Timeline   2 IOC
+  TIME  Earliest  →  Latest   UTC   macb   F4 edit
+  FIND  All paths   ·   All hosts   ·   1 exclusions   F5 edit
+   TIMESTAMP           HOST               MACB PATH                                       ASSESSMENT
+   2025-06-15 15:06:41 example-host       macb /keep/file-01
+   2025-06-15 15:06:42 example-host       macb /keep/file-02
+   2025-06-15 15:06:43 example-host       macb /keep/file-03
+   2025-06-15 15:06:44 example-host       macb /keep/file-04
+▌  2025-06-15 15:06:45 example-host       macb /keep/file-05
+   2025-06-15 15:06:46 example-host       macb /keep/file-06
+   2025-06-15 15:06:47 example-host       macb /keep/file-07
+   2025-06-15 15:06:48 example-host       macb /keep/file-08
+   2025-06-15 15:06:49 example-host       macb /keep/file-09
+   2025-06-15 15:06:50 example-host       macb /keep/file-10
+   2025-06-15 15:06:51 example-host       macb /keep/file-11
+   2025-06-15 15:06:52 example-host       macb /keep/file-12
+   2025-06-15 15:06:53 example-host       macb /keep/file-13
+   2025-06-15 15:06:54 example-host       macb /keep/file-14
+   2025-06-15 15:06:55 example-host       macb /keep/file-15
+   2025-06-15 15:06:56 example-host       macb /keep/file-16
+   2025-06-15 15:06:57 example-host       macb /keep/file-17
+   2025-06-15 15:06:58 example-host       macb /keep/file-18
+   2025-06-15 15:06:59 example-host       macb /keep/file-19
+   2025-06-15 15:07:00 example-host       macb /keep/file-20
+  ● Ready
+  ↑↓ scroll   j/k select   SPACE toggle   g goto   TAB tag   ENTER inspect/expand   c collapse   C t
+ F1  Help            F2  Tags            F3  Detail          F4  Time            F5  Filter
+ F6  Fork            F7  Views           F8  Marks           F9  Export          q  Quit

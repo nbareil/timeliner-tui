@@ -77,7 +77,12 @@ the entire prefetch buffer before displaying those available rows.
 
 Ordinary browsing now returns a partial page after checking 4,096 candidates
 when an event or fold summary is available. The UI keeps scrolling enabled past
-a partial page, and summaries beyond the scanned interval wait until that
+a partial page and fills missing screen rows in the background. Background
+requests stop once the visible window is full, preserve the selected event,
+and can be cancelled or superseded by navigation. Scrolling into an active fill
+reuses its request instead of restarting the search. At the end of the timeline,
+earlier rows fill the remaining space when available.
+Summaries beyond the scanned interval wait until that
 interval has been searched. Empty searches and navigation requiring complete
 context continue until they find their destination or exhaust the range.
 Raw queries and exports still retrieve complete pages.
@@ -87,6 +92,12 @@ initial rows after 4,096 candidates in 52 ms. Refreshing its saved folds took
 381 ms separately. This was one local measurement, not an end-to-end terminal
 benchmark. Regression tests exercise reopening, both cursor directions, later
 matches across excluded gaps, and partial pages containing saved folds.
+
+A subsequent read-only check of the current saved position exercised the whole
+50-row window: it filled automatically in 12.8 s using debug code, after checking
+1,700,309 candidates. Rows appeared progressively during the search; the work
+stopped at 50 visible rows. This measurement includes refreshing saved folds and
+does not include terminal rendering.
 
 ## Validation and limits
 
@@ -103,8 +114,9 @@ python3 tests/support/tmux_mouse.py target/release/timeliner-tui
 At the initial audit, all 212 tests passed, as did formatting, Clippy, the release
 build, and the tmux integration check.
 
-For the session-resume fix, all 216 tests passed, along with formatting, Clippy,
-the debug build, and the tmux check using `target/debug/timeliner-tui`.
+For the session-resume and background-fill fixes, all 222 tests passed, along with
+formatting, Clippy, the debug build, and the tmux check using
+`target/debug/timeliner-tui`.
 
 The measurements use local synthetic data and warm filesystem caches. Sparse
 search remains proportional to the candidates examined. Cold storage, dense

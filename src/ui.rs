@@ -132,6 +132,9 @@ enum Load {
     Step {
         reverse: bool,
     },
+    Fill {
+        reverse: bool,
+    },
     Replace,
     Filter(Option<EventKey>),
     FilterLast(Option<EventKey>),
@@ -173,6 +176,7 @@ struct Pending {
     candidate: Option<View>,
     anchor: Option<EventKey>,
     limit: usize,
+    buffer_limit: usize,
 }
 #[derive(Clone, Copy, PartialEq)]
 enum FormKind {
@@ -217,6 +221,7 @@ pub struct App {
     pub ready: bool,
     generation: u64,
     pending: Option<Pending>,
+    background: Option<Pending>,
     modal: Option<Modal>,
     prefix: Option<char>,
     previous: Option<(usize, View)>,
@@ -241,6 +246,7 @@ impl Default for App {
             ready: false,
             generation: 0,
             pending: None,
+            background: None,
             modal: None,
             prefix: None,
             previous: None,
@@ -465,6 +471,7 @@ impl App {
         inclusive: bool,
     ) -> Action {
         self.generation += 1;
+        self.background = None;
         let limit = (self.height * 8).clamp(128, 1024);
         self.pending = Some(Pending {
             generation: self.generation,
@@ -472,6 +479,7 @@ impl App {
             candidate: candidate.clone(),
             anchor,
             limit,
+            buffer_limit: limit,
         });
         self.status = "Loading… (Escape cancels)".into();
         Action::Page(PageRequest {
@@ -484,6 +492,7 @@ impl App {
                     | Load::Last
                     | Load::FilterLast(_)
                     | Load::Step { reverse: true }
+                    | Load::Fill { reverse: true }
                     | Load::Reposition { reverse: true, .. }
             ),
             inclusive,
@@ -495,11 +504,61 @@ impl App {
                     | Load::Before { .. }
                     | Load::After { .. }
                     | Load::Step { .. }
+                    | Load::Fill { .. }
                     | Load::Last
             ),
             detect_burst: None,
             jump: None,
         })
+    }
+    /// Fill the visible window after publishing a partial page. This request
+    /// does not block commands on rows that are already available.
+    fn fill_viewport(&mut self) -> Option<Action> {
+        if self.pending.is_some() || self.background.is_some() || self.rows.is_empty() {
+            return None;
+        }
+        let visible = self.rows.len().saturating_sub(self.top);
+        if visible >= self.height {
+            return None;
+        }
+        let reverse = self.end_after;
+        if reverse && self.top > 0 {
+            self.scroll_to(self.top.saturating_sub(self.height - visible), true);
+            self.remember();
+        }
+        let missing = self.height.saturating_sub(self.rows.len() - self.top);
+        if missing == 0 || (reverse && self.end_before) {
+            return None;
+        }
+        let anchor = if reverse {
+            self.rows.first()
+        } else {
+            self.rows.last()
+        }
+        .map(DisplayRow::key);
+        let Action::Page(mut request) = self.load(Load::Fill { reverse }, None, anchor, false)
+        else {
+            unreachable!()
+        };
+        request.limit = missing.min(request.limit);
+        self.pending.as_mut().unwrap().limit = request.limit;
+        self.background = self.pending.take();
+        self.status = "Loading visible rows… (Escape cancels)".into();
+        Some(Action::Page(request))
+    }
+    /// Reuse an in-flight fill when a scroll needs the same rows. Restarting
+    /// that scan would discard progress across a large excluded interval.
+    fn use_background(&mut self, mode: Load, reverse: bool) -> bool {
+        if !self.background.as_ref().is_some_and(|pending| {
+            matches!(pending.mode, Load::Fill { reverse: direction } if direction == reverse)
+        }) {
+            return false;
+        }
+        let mut pending = self.background.take().unwrap();
+        pending.mode = mode;
+        self.pending = Some(pending);
+        self.status = "Loading… (Escape cancels)".into();
+        true
     }
     fn refresh(&mut self) -> Action {
         self.load(
@@ -542,28 +601,26 @@ impl App {
             if room > 0 {
                 self.scroll_to(self.top + room.min(delta as usize), keep_event);
             } else if !self.end_after && self.pending.is_none() {
-                return Some(self.load(
-                    Load::After {
-                        delta: delta as usize,
-                        keep_event,
-                    },
-                    None,
-                    self.rows.last().map(|r| r.key()),
-                    false,
-                ));
+                let mode = Load::After {
+                    delta: delta as usize,
+                    keep_event,
+                };
+                if self.use_background(mode, false) {
+                    return None;
+                }
+                return Some(self.load(mode, None, self.rows.last().map(|r| r.key()), false));
             }
         } else if self.top > 0 {
             self.scroll_to(self.top.saturating_sub(delta.unsigned_abs()), keep_event);
         } else if !self.end_before && self.pending.is_none() {
-            return Some(self.load(
-                Load::Before {
-                    delta: delta.unsigned_abs(),
-                    keep_event,
-                },
-                None,
-                self.rows.first().map(|r| r.key()),
-                false,
-            ));
+            let mode = Load::Before {
+                delta: delta.unsigned_abs(),
+                keep_event,
+            };
+            if self.use_background(mode, true) {
+                return None;
+            }
+            return Some(self.load(mode, None, self.rows.first().map(|r| r.key()), false));
         }
         self.remember();
         None
@@ -579,6 +636,9 @@ impl App {
                 self.end_after
             };
             if !at_end && self.pending.is_none() {
+                if self.use_background(Load::Step { reverse }, reverse) {
+                    return None;
+                }
                 return Some(self.load(Load::Step { reverse }, None, Some(anchor), false));
             }
             return None;
@@ -779,11 +839,20 @@ impl App {
                 vec![action]
             }
             Message::Page(generation, mut rows) | Message::PartialPage(generation, mut rows) => {
-                let Some(pending) = self.pending.take() else {
+                let slot = if self
+                    .background
+                    .as_ref()
+                    .is_some_and(|pending| pending.generation == generation)
+                {
+                    &mut self.background
+                } else {
+                    &mut self.pending
+                };
+                let Some(pending) = slot.take() else {
                     return vec![];
                 };
                 if pending.generation != generation {
-                    self.pending = Some(pending);
+                    *slot = Some(pending);
                     return vec![];
                 }
                 let Pending {
@@ -791,6 +860,7 @@ impl App {
                     candidate,
                     anchor,
                     limit,
+                    buffer_limit,
                     ..
                 } = pending;
                 if matches!(mode, Load::DetectBurst { .. } | Load::FindJump(_)) {
@@ -909,6 +979,7 @@ impl App {
                         }
                     }
                     Load::After { .. }
+                    | Load::Fill { reverse: false }
                     | Load::Reposition { reverse: false, .. }
                     | Load::Step { reverse: false } => {
                         self.end_after = complete && rows.len() < limit;
@@ -927,14 +998,15 @@ impl App {
                                 self.view_mut().selected += 1;
                             }
                         }
-                        if self.rows.len() > limit * 2 {
-                            let discard = self.rows.len() - limit * 2;
+                        if self.rows.len() > buffer_limit * 2 {
+                            let discard = self.rows.len() - buffer_limit * 2;
                             self.rows.drain(..discard);
                             self.top = self.top.saturating_sub(discard);
                             self.end_before = false;
                         }
                     }
                     Load::Before { .. }
+                    | Load::Fill { reverse: true }
                     | Load::Reposition { reverse: true, .. }
                     | Load::Step { reverse: true } => {
                         self.end_before = complete && rows.len() < limit;
@@ -942,6 +1014,10 @@ impl App {
                         rows.append(&mut self.rows);
                         self.rows = rows;
                         self.top += added;
+                        if matches!(mode, Load::Fill { reverse: true }) {
+                            let room = self.height.saturating_sub(self.rows.len() - self.top);
+                            self.scroll_to(self.top.saturating_sub(added.min(room)), true);
+                        }
                         if let Load::Before { delta, keep_event } = mode {
                             self.scroll_to(self.top.saturating_sub(delta), keep_event);
                         }
@@ -952,8 +1028,8 @@ impl App {
                                 self.view_mut().selected -= 1;
                             }
                         }
-                        if self.rows.len() > limit * 2 {
-                            self.rows.truncate(limit * 2);
+                        if self.rows.len() > buffer_limit * 2 {
+                            self.rows.truncate(buffer_limit * 2);
                             self.end_after = false;
                         }
                     }
@@ -984,6 +1060,9 @@ impl App {
                     && let Some(row) = self.rows.get(index + 1).and_then(DisplayRow::event)
                 {
                     return vec![self.detect_burst(row.key, row.host.clone(), true)];
+                }
+                if !complete || matches!(mode, Load::Fill { .. }) || limit < buffer_limit {
+                    return self.fill_viewport().into_iter().collect();
                 }
                 vec![]
             }
@@ -1085,6 +1164,10 @@ impl App {
                         .pending
                         .as_ref()
                         .is_some_and(|p| p.generation == generation)
+                    || self
+                        .background
+                        .as_ref()
+                        .is_some_and(|p| p.generation == generation)
                 {
                     self.status = text;
                 }
@@ -1118,6 +1201,13 @@ impl App {
                     .is_some_and(|p| p.generation == generation)
                 {
                     self.pending = None;
+                    self.status = error;
+                } else if self
+                    .background
+                    .as_ref()
+                    .is_some_and(|p| p.generation == generation)
+                {
+                    self.background = None;
                     self.status = error;
                 }
                 vec![]
@@ -1364,6 +1454,7 @@ impl App {
             if self.modal.take().is_none() {
                 self.selected_records.clear();
                 self.pending = None;
+                self.background = None;
                 self.status = "Cancelled".into();
                 self.generation += 1;
                 return vec![Action::Cancel];

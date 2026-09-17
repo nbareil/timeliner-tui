@@ -477,7 +477,7 @@ impl App {
     }
 
     fn draw_status(&self, frame: &mut Frame, area: Rect, p: Palette) {
-        let busy = !self.ready || self.pending.is_some();
+        let busy = !self.ready || self.pending.is_some() || self.background.is_some();
         let mut state = vec![label(
             if busy { "  ◌ " } else { "  ● " },
             if busy { p.accent } else { p.teal },
