@@ -23,6 +23,10 @@ sha2 = "0.10"
 tempfile = "3"
 fs2 = "0.4"
 
+[features]
+# Opt-in experiment: evaluate path exclusions inside SQLite's candidate scan.
+sqlite-exclusions = ["rusqlite/functions"]
+
 [profile.dev]
 # Keep large timeline scans responsive in cargo run / target/debug builds.
 # Debug information, assertions, and overflow checks retain their defaults.

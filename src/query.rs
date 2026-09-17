@@ -16,6 +16,9 @@ use std::{
     },
 };
 
+#[cfg(feature = "sqlite-exclusions")]
+mod sql_exclusions;
+
 #[derive(Clone)]
 pub struct Cancellation {
     pub clock: Arc<AtomicU64>,
@@ -376,13 +379,34 @@ pub(crate) fn page_omitting(
         .iter()
         .filter(|burst| burst.exclusive && burst.last >= lo && burst.first <= hi)
         .collect();
+    let sql_exclusions = cfg!(feature = "sqlite-exclusions") && !view.predicate.exclude.is_empty();
+    #[cfg(feature = "sqlite-exclusions")]
+    let (matcher, sql_scan) = {
+        let mut matcher = matcher;
+        let scan = if sql_exclusions {
+            Some(sql_exclusions::Scan::install(
+                db,
+                std::mem::replace(&mut matcher.excludes, Exclusions::Separate(Vec::new())),
+                exclusive_bursts
+                    .iter()
+                    .map(|burst| (*burst).clone())
+                    .collect(),
+                page,
+                first_summary,
+                scan_budget,
+            )?)
+        } else {
+            None
+        };
+        (matcher, scan)
+    };
     let mut result = Vec::with_capacity(limit);
     let mut legacy_metadata = HashMap::new();
     let mut checked = 0_u64;
     let mut continuation = None;
     loop {
         cancel.check()?;
-        let sql = cursor_sql(reverse, lower, upper, cache_db.is_some());
+        let sql = cursor_sql(reverse, lower, upper, cache_db.is_some(), sql_exclusions);
         let mut stmt = db.prepare_cached(&sql)?;
         let mut candidates = stmt.query(params![
             lo.epoch,
@@ -412,11 +436,24 @@ pub(crate) fn page_omitting(
             let host = candidate.get_ref(3)?.as_str()?;
             let path = candidate.get_ref(4)?.as_str()?;
             let tag = Tag::from_i64(candidate.get(5)?);
-            checked += 1;
+            #[cfg(feature = "sqlite-exclusions")]
+            let included = if let Some(scan) = &sql_scan {
+                checked = scan.checked();
+                scan.included()
+            } else {
+                checked += 1;
+                true
+            };
+            #[cfg(not(feature = "sqlite-exclusions"))]
+            let included = {
+                checked += 1;
+                true
+            };
             if checked.is_multiple_of(1024) {
                 progress(checked);
             }
-            if matcher.matches(path, host, tag)
+            if included
+                && matcher.matches(path, host, tag)
                 && !bursts
                     .iter()
                     .any(|burst| burst.host == host && burst.contains_key(key))
@@ -448,6 +485,10 @@ pub(crate) fn page_omitting(
                     is_directory: directory.unwrap_or(fallback.0),
                     zero_size: zero_size.unwrap_or(fallback.1),
                 });
+                #[cfg(feature = "sqlite-exclusions")]
+                if let Some(scan) = &sql_scan {
+                    scan.found_row();
+                }
                 if result.len() == limit {
                     break;
                 }
@@ -468,6 +509,12 @@ pub(crate) fn page_omitting(
                 continuation = Some(key);
                 break;
             }
+        }
+        #[cfg(feature = "sqlite-exclusions")]
+        if let Some(scan) = &sql_scan {
+            // An exhausted cursor can have a rejected tail shorter than the
+            // checkpoint interval; include those candidates in the final count.
+            checked = scan.checked();
         }
         let Some(last) = skipped_to else {
             break;
@@ -491,12 +538,23 @@ pub(crate) fn page_omitting(
     })
 }
 
-fn cursor_sql(reverse: bool, lower: &str, upper: &str, cached: bool) -> String {
+fn cursor_sql(
+    reverse: bool,
+    lower: &str,
+    upper: &str,
+    cached: bool,
+    sql_exclusions: bool,
+) -> String {
     let order = if reverse { "DESC" } else { "ASC" };
     let records = if cached {
         "record_store.records"
     } else {
         "records"
+    };
+    let exclusion_clause = if sql_exclusions {
+        " AND timeliner_scan_candidate(e.epoch,e.record,r.path)"
+    } else {
+        ""
     };
     // Both bounds must be composite. A separate scalar epoch range can make
     // SQLite scan from the timeframe's beginning, ignoring the cursor seek.
@@ -507,7 +565,7 @@ fn cursor_sql(reverse: bool, lower: &str, upper: &str, cached: bool) -> String {
                 r.manual_tag IS NULL,r.matches!='[]',r.is_directory,r.zero_size
          FROM events e CROSS JOIN {records} r ON r.id=e.record
          WHERE (e.epoch,e.record) {lower} (?,?)
-         AND (e.epoch,e.record) {upper} (?,?) AND (e.macb & ?) != 0
+         AND (e.epoch,e.record) {upper} (?,?) AND (e.macb & ?) != 0{exclusion_clause}
          ORDER BY e.epoch {order},e.record {order}"
     )
 }
@@ -610,28 +668,45 @@ mod tests {
              CREATE TABLE record_store.records(id INTEGER PRIMARY KEY,host TEXT,path TEXT,tag INTEGER,
                  manual_tag INTEGER,matches TEXT,is_directory INTEGER,zero_size INTEGER);",
         ).unwrap();
+        #[cfg(feature = "sqlite-exclusions")]
+        let _scan = sql_exclusions::Scan::install(
+            &db,
+            Exclusions::Separate(Vec::new()),
+            Vec::new(),
+            Page::default(),
+            None,
+            None,
+        )
+        .unwrap();
+        let variants: &[bool] = if cfg!(feature = "sqlite-exclusions") {
+            &[false, true]
+        } else {
+            &[false]
+        };
         for cached in [false, true] {
             for reverse in [true, false] {
-                let sql = format!(
-                    "EXPLAIN QUERY PLAN {}",
-                    cursor_sql(reverse, ">", "<=", cached)
-                );
-                let plan = db
-                    .prepare(&sql)
-                    .unwrap()
-                    .query_map(params![100, 40, 200, 80, 15], |r| r.get::<_, String>(3))
-                    .unwrap()
-                    .collect::<rusqlite::Result<Vec<_>>>()
-                    .unwrap();
-                assert_eq!(plan.len(), 2, "{plan:?}");
-                assert!(
-                    plan[0].contains("((epoch,record)>(?,?) AND (epoch,record)<(?,?))"),
-                    "{plan:?}"
-                );
-                assert!(
-                    plan[1].contains("SEARCH r USING INTEGER PRIMARY KEY"),
-                    "{plan:?}"
-                );
+                for &sql_exclusions in variants {
+                    let sql = format!(
+                        "EXPLAIN QUERY PLAN {}",
+                        cursor_sql(reverse, ">", "<=", cached, sql_exclusions)
+                    );
+                    let plan = db
+                        .prepare(&sql)
+                        .unwrap()
+                        .query_map(params![100, 40, 200, 80, 15], |r| r.get::<_, String>(3))
+                        .unwrap()
+                        .collect::<rusqlite::Result<Vec<_>>>()
+                        .unwrap();
+                    assert_eq!(plan.len(), 2, "{plan:?}");
+                    assert!(
+                        plan[0].contains("((epoch,record)>(?,?) AND (epoch,record)<(?,?))"),
+                        "{plan:?}"
+                    );
+                    assert!(
+                        plan[1].contains("SEARCH r USING INTEGER PRIMARY KEY"),
+                        "{plan:?}"
+                    );
+                }
             }
         }
     }
