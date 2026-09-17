@@ -521,6 +521,11 @@ The flake pins the development toolchain and package set. `Cargo.lock` pins Rust
 dependencies. The flake checks build and test the package and run formatting and
 Clippy checks.
 
+Development builds use optimization level 1 so `cargo run` and
+`target/debug/timeliner-tui` stay responsive on large timelines. Debug symbols,
+assertions, and overflow checks remain enabled. For an unoptimized debugging
+build, use `CARGO_PROFILE_DEV_OPT_LEVEL=0 cargo build`.
+
 Source modules separate bodyfile parsing, IOC rules, source access, SQLite
 storage, indexed queries, export, background workers, and the terminal UI.
 `src/theme.rs` defines the palettes; `src/ui/render.rs` handles presentation.

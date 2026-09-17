@@ -3,7 +3,7 @@ use crate::{
     store::{Store, configure},
 };
 use anyhow::{Result, bail};
-use regex::Regex;
+use regex::{Regex, RegexSet};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::{
@@ -68,7 +68,37 @@ impl Cancellation {
 pub struct Matcher {
     pub predicate: Predicate,
     include: Option<Regex>,
-    excludes: Vec<Regex>,
+    excludes: Exclusions,
+}
+
+enum Exclusions {
+    Set(RegexSet),
+    Separate(Vec<Regex>),
+}
+
+impl Exclusions {
+    fn new(patterns: &[String]) -> Result<Self> {
+        if patterns.len() > 1
+            && let Ok(set) = RegexSet::new(patterns)
+        {
+            return Ok(Self::Set(set));
+        }
+        // A combined automaton can exceed the regex size limit even when
+        // every individual expression is valid. Keep those views usable.
+        Ok(Self::Separate(
+            patterns
+                .iter()
+                .map(|s| Regex::new(s))
+                .collect::<Result<_, _>>()?,
+        ))
+    }
+
+    fn is_match(&self, path: &str) -> bool {
+        match self {
+            Self::Set(set) => set.is_match(path),
+            Self::Separate(patterns) => patterns.iter().any(|re| re.is_match(path)),
+        }
+    }
 }
 impl Matcher {
     pub fn new(predicate: &Predicate) -> Result<Self> {
@@ -79,16 +109,12 @@ impl Matcher {
             } else {
                 Some(Regex::new(&predicate.include)?)
             },
-            excludes: predicate
-                .exclude
-                .iter()
-                .map(|s| Regex::new(s))
-                .collect::<Result<_, _>>()?,
+            excludes: Exclusions::new(&predicate.exclude)?,
         })
     }
     pub fn matches(&self, path: &str, host: &str, tag: Tag) -> bool {
         self.include.as_ref().is_none_or(|re| re.is_match(path))
-            && !self.excludes.iter().any(|re| re.is_match(path))
+            && !self.excludes.is_match(path)
             && (self.predicate.hosts.is_empty() || self.predicate.hosts.iter().any(|h| h == host))
             && self.predicate.tags.as_ref().is_none_or(|tags| {
                 if tags.is_empty() {
@@ -346,6 +372,10 @@ pub(crate) fn page_omitting(
     } else {
         summaries.min()
     };
+    let exclusive_bursts: Vec<_> = bursts
+        .iter()
+        .filter(|burst| burst.exclusive && burst.last >= lo && burst.first <= hi)
+        .collect();
     let mut result = Vec::with_capacity(limit);
     let mut legacy_metadata = HashMap::new();
     let mut checked = 0_u64;
@@ -370,9 +400,9 @@ pub(crate) fn page_omitting(
             };
             // Seek over known host-only runs, rather than reading every hidden
             // event on each visit. Mixed-host runs retain the other hosts.
-            if let Some(burst) = bursts
+            if let Some(burst) = exclusive_bursts
                 .iter()
-                .find(|burst| burst.exclusive && burst.contains_key(key))
+                .find(|burst| burst.contains_key(key))
             {
                 skipped_to = Some(if reverse { burst.first } else { burst.last });
                 break;
@@ -485,6 +515,90 @@ fn cursor_sql(reverse: bool, lower: &str, upper: &str, cached: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn combined_exclusions_preserve_regex_flags_boundaries_and_unicode() {
+        let patterns = [
+            r"(?i)^/tmp(?:[/\\]|$)",
+            r"^/CaseSensitive$",
+            r"^C:\\Windows(?:\\|$)",
+            r"/café/\p{Greek}+$",
+            r"(?m)^hidden$",
+            r"\.log$",
+        ];
+        let excludes: Vec<_> = patterns.iter().map(|s| s.to_string()).collect();
+        let separate: Vec<_> = patterns.iter().map(|s| Regex::new(s).unwrap()).collect();
+        for extra in [None, Some(""), Some(r"\b")] {
+            let mut predicate = Predicate {
+                include: r"(?s).+".into(),
+                exclude: excludes.clone(),
+                hosts: vec!["host-a".into()],
+                tags: Some(vec![Tag::Suspicious, Tag::Malicious]),
+            };
+            if let Some(pattern) = extra {
+                predicate.exclude.push(pattern.into());
+            }
+            let matcher = Matcher::new(&predicate).unwrap();
+            for path in [
+                "/TMP/file",
+                "/tmp",
+                "/tmpfile",
+                "/CaseSensitive",
+                "/casesensitive",
+                r"C:\Windows\System32",
+                r"C:\WindowsExtra",
+                "/café/αβ",
+                "/café/ascii",
+                "/prefix\nhidden\nsuffix",
+                "/file.log",
+                "/file.LOG",
+                "/keep",
+                "",
+            ] {
+                for host in ["host-a", "host-b"] {
+                    for tag in [Tag::None, Tag::Suspicious, Tag::Malicious] {
+                        let expected = !path.is_empty()
+                            && !separate.iter().any(|re| re.is_match(path))
+                            && extra.is_none_or(|re| !Regex::new(re).unwrap().is_match(path))
+                            && host == "host-a"
+                            && tag != Tag::None;
+                        assert_eq!(
+                            matcher.matches(path, host, tag),
+                            expected,
+                            "{extra:?}: {path:?}, {host}, {tag:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_exclusions_still_fail_instead_of_disabling_filtering() {
+        for exclude in [vec!["[".into()], vec!["^/valid".into(), "[".into()]] {
+            assert!(
+                Matcher::new(&Predicate {
+                    exclude,
+                    ..Predicate::default()
+                })
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn individually_valid_exclusions_survive_the_combined_size_limit() {
+        let predicate = Predicate {
+            exclude: (0..20).map(|n| format!(r"^\w{{20}}/{n}$")).collect(),
+            ..Predicate::default()
+        };
+        assert!(RegexSet::new(&predicate.exclude).is_err());
+        let matcher = Matcher::new(&predicate).unwrap();
+        let prefix = "α".repeat(20);
+        assert!(!matcher.matches(&format!("{prefix}/19"), "", Tag::None));
+        assert!(matcher.matches(&format!("{prefix}/20"), "", Tag::None));
+    }
+
     #[test]
     fn sqlite_uses_the_complete_cursor_for_both_index_bounds() {
         let db = Connection::open_in_memory().unwrap();

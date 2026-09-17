@@ -99,6 +99,49 @@ A subsequent read-only check of the current saved position exercised the whole
 stopped at 50 visible rows. This measurement includes refreshing saved folds and
 does not include terminal rendering.
 
+## Debug startup follow-up: 2026-09-17
+
+The next comparison pinned one copy of the current saved session and queried
+the workspace read-only. Its active view had 31 exclusions and 17 saved folds.
+Fetching 50 display rows required 1,621,570 candidate checks. The query and fold
+code from `59f911b2c72a40ea98593a3a662b84e3451789ec` returned the same 50
+event/summary keys as the new code.
+
+| Query implementation and build | Restore folds and fetch 50 rows |
+| --- | ---: |
+| `59f911b`, original unoptimized debug settings | 25.86 s |
+| `1709379`, original unoptimized debug settings | 11.44 s |
+| Combined exclusions and fold-range pruning, unoptimized | 10.28 s |
+| Same query changes, development optimization level 1 | 2.47 s, 2.47 s |
+
+These are sequential measurements with warm filesystem caches, including reader
+setup and fold restoration. They do not reproduce the user's historical instant
+load: the snapshot is the current saved position, not the position from that
+earlier run.
+
+The changes are:
+
+- Compile multiple exclusions into a `RegexSet`, retaining separate matching
+  if their combined size exceeds the regex limit. Individual flags, Unicode,
+  directory boundaries, and invalid-expression errors retain their behavior.
+  Fold restoration fell from about 390 ms to 155 ms before compiler tuning.
+- Remove exclusive folds outside the query bounds from the candidate loop.
+  All 17 saved folds preceded this cursor; checking them again for each of
+  1.6 million candidates served no purpose.
+- Set development optimization to level 1. This optimizes the application and
+  its dependencies, including bundled SQLite, at the existing
+  `target/debug/timeliner-tui` path. Debug information, assertions, and overflow
+  checks remain enabled. `CARGO_PROFILE_DEV_OPT_LEVEL=0 cargo build` restores
+  an unoptimized build when needed for debugging.
+
+A separate probe drove the current UI's initial request and background fills
+until all 50 screen rows were available. It fell from 12.26 s before these
+changes to 2.53–2.54 s afterward, with the initial row available in 63–82 ms.
+Both versions checked 1,651,152 candidates across the partial requests.
+This measures a filled viewport, including saved-fold restoration; command-line
+source resolution, controller startup, and terminal rendering are excluded.
+No saved session or evidence was modified by these probes.
+
 ## Validation and limits
 
 Validation used the pinned Nix development environment:
@@ -118,8 +161,13 @@ For the session-resume and background-fill fixes, all 222 tests passed, along wi
 formatting, Clippy, the debug build, and the tmux check using
 `target/debug/timeliner-tui`.
 
-The measurements use local synthetic data and warm filesystem caches. Sparse
-search remains proportional to the candidates examined. Cold storage, dense
-tag views, end-to-end terminal latency, and 10M/100M workloads were not measured
+For the debug startup follow-up, all 225 tests passed, including new comparisons
+of combined and individual exclusion matching and the combined-size fallback.
+Formatting, strict Clippy, the debug build, and the tmux integration check passed.
+
+The measurements use local synthetic data and a read-only saved workspace, with
+warm filesystem caches. Sparse search remains proportional to the candidates
+examined. Cold storage, dense tag views, end-to-end terminal latency, and
+10M/100M workloads were not measured
 for this change. The database schema and evidence-verification rules are
 unchanged.

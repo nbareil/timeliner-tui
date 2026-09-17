@@ -23,6 +23,11 @@ sha2 = "0.10"
 tempfile = "3"
 fs2 = "0.4"
 
+[profile.dev]
+# Keep large timeline scans responsive in cargo run / target/debug builds.
+# Debug information, assertions, and overflow checks retain their defaults.
+opt-level = 1
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
