@@ -134,6 +134,44 @@ impl Fixture {
 }
 
 #[test]
+fn access_only_folds_count_restore_and_assess_only_exact_matching_events() {
+    let fixture = Fixture::new(&[(0, 6, 0), (1, 6, 0)]);
+    let mut view = View {
+        time_mask: 2,
+        time_exact: true,
+        ..View::default()
+    };
+    let raw = fixture.raw(&view);
+    assert_eq!(raw.len(), 4);
+    assert!(fixture.detect(&view, &raw[0], 2).is_none());
+    let summary = fixture.detect(&view, &raw[0], 1).unwrap();
+    assert_eq!(summary.count, 4);
+    assert_eq!(summary.macb, 2);
+    view.bursts.push(summary);
+    let combined = fixture
+        .raw(&View::default())
+        .into_iter()
+        .find(|row| row.macb == 3)
+        .unwrap();
+    for (row, expected_tagged) in [(&combined, 0), (&raw[0], 1)] {
+        let change = fixture
+            .store
+            .set_tag(row.key.record, Some(Tag::Suspicious))
+            .unwrap();
+        burst::apply_tag_change(&mut view, &change).unwrap();
+        assert_eq!(view.bursts[0].tagged, expected_tagged);
+    }
+    let saved = view.bursts.clone();
+    burst::restore(&fixture.store, &mut view, &Cancellation::never(), |_| {}).unwrap();
+    assert_eq!(view.bursts, saved);
+    for reverse in [false, true] {
+        let displayed = fixture.displayed(&view, reverse, 2);
+        assert_eq!(displayed.len(), 1);
+        assert!(matches!(&displayed[0], DisplayRow::Burst(burst) if burst.count == 4));
+    }
+}
+
+#[test]
 fn collapse_from_any_dense_second_has_identical_boundaries_across_paths_and_macb_types() {
     let fixture = Fixture::new(&[
         (40, 4, 0),

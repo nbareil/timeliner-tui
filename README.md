@@ -376,6 +376,16 @@ selection, and MACB timestamp types. Exclusions are ORed; the other conditions
 are combined with AND. Invalid regexes leave the working view intact. The syntax
 is Rust regex syntax, without lookaround or backreferences.
 
+To hide access-only events (`.a..`), set **Timestamp types** to `mcb` in F5.
+To show only access-only events, enter `=a`. Without `=`, `a` matches every event
+with an access timestamp, including combined events such as `ma..` and `macb`.
+The `=` prefix matches any exact combination: `=ma` shows only `ma..`.
+These settings apply to events, so other timestamps for the same file can
+still appear when they match. Each tab saves its choice; navigation, collapsed
+groups, and current-view exports use it too. The timeline displays `=` before
+the active timestamp mask when exact matching is enabled.
+See the [access-only filter terminal capture](docs/images/access-only.txt).
+
 Nonpositive timestamps are hidden by default. Enable them in F5 when needed.
 Exclusions apply as pages are fetched from your current position, within the
 selected timeframe. Adding or removing one does not build a full filtered
@@ -537,8 +547,8 @@ or fold summaries; raw queries and exports continue to use `src/query.rs`.
 jump destinations.
 `cargo run --example appearance -- dark` emits a JSON cell capture of synthetic
 timeline data; append `details`, `uac-details`, `filters`, `tags`, `views`, `marks`,
-or `goto` to preview dialogs, or `selection`, `directories`, and `zero-size` to preview
-timeline markers.
+`goto`, or `access-only` to preview dialogs, or `selection`, `directories`, and
+`zero-size` to preview timeline markers.
 Integration tests under `tests/` exercise evidence preservation, filtering,
 assessment state, CLI behavior, and terminal rendering.
 The tmux check uses a temporary socket, configuration, and investigation. It

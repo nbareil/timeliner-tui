@@ -414,6 +414,7 @@ pub(crate) fn page_omitting(
             hi.epoch,
             hi.record,
             view.time_mask,
+            view.time_exact,
         ])?;
         let mut skipped_to = None;
         while let Some(candidate) = candidates.next()? {
@@ -565,7 +566,8 @@ fn cursor_sql(
                 r.manual_tag IS NULL,r.matches!='[]',r.is_directory,r.zero_size
          FROM events e CROSS JOIN {records} r ON r.id=e.record
          WHERE (e.epoch,e.record) {lower} (?,?)
-         AND (e.epoch,e.record) {upper} (?,?) AND (e.macb & ?) != 0{exclusion_clause}
+         AND (e.epoch,e.record) {upper} (?,?) AND (e.macb & ?5) != 0
+         AND (?6 = 0 OR e.macb = ?5){exclusion_clause}
          ORDER BY e.epoch {order},e.record {order}"
     )
 }
@@ -693,7 +695,9 @@ mod tests {
                     let plan = db
                         .prepare(&sql)
                         .unwrap()
-                        .query_map(params![100, 40, 200, 80, 15], |r| r.get::<_, String>(3))
+                        .query_map(params![100, 40, 200, 80, 15, false], |r| {
+                            r.get::<_, String>(3)
+                        })
                         .unwrap()
                         .collect::<rusqlite::Result<Vec<_>>>()
                         .unwrap();

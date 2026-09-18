@@ -27,7 +27,8 @@ pub fn restore(
     let mut statement = store.conn.prepare_cached(
         "SELECT e.epoch,e.record,e.macb,r.host,r.path,r.tag,r.matches!='[]'
          FROM events e JOIN records r ON r.id=e.record
-         WHERE e.epoch>=? AND e.epoch<=? AND (e.macb & ?) != 0
+         WHERE e.epoch>=? AND e.epoch<=? AND (e.macb & ?3) != 0
+         AND (?4 = 0 OR e.macb = ?3)
          ORDER BY e.epoch,e.record",
     )?;
     let mut restored = Vec::with_capacity(view.bursts.len());
@@ -46,7 +47,7 @@ pub fn restore(
         summary.ioc_matches = 0;
         summary.exclusive = true;
         let mut found_origin = false;
-        let mut rows = statement.query(params![lo, hi, view.time_mask])?;
+        let mut rows = statement.query(params![lo, hi, view.time_mask, view.time_exact])?;
         while let Some(row) = rows.next()? {
             cancel.check()?;
             checked += 1;
@@ -111,6 +112,7 @@ pub fn apply_tag_change(view: &mut View, change: &TagChange) -> Result<()> {
                 key.epoch >= burst.first.epoch
                     && key.epoch <= burst.last.epoch
                     && macb & view.time_mask != 0
+                    && (!view.time_exact || *macb == view.time_mask)
             })
             .count() as u64;
         if affected == 0 {
@@ -161,7 +163,8 @@ pub fn detect(
     let mut statement = store.conn.prepare_cached(
         "SELECT e.record,e.macb,r.host,r.path,r.tag,r.matches!='[]'
          FROM events e JOIN records r ON r.id=e.record
-         WHERE e.epoch=? AND (e.macb & ?) != 0 ORDER BY e.record",
+         WHERE e.epoch=? AND (e.macb & ?2) != 0
+         AND (?3 = 0 OR e.macb = ?2) ORDER BY e.record",
     )?;
     let mut checked = 0_u64;
     let mut found_origin = false;
@@ -187,7 +190,7 @@ pub fn detect(
             exclusive: true,
             origin,
         };
-        let mut rows = statement.query(params![epoch, view.time_mask])?;
+        let mut rows = statement.query(params![epoch, view.time_mask, view.time_exact])?;
         while let Some(row) = rows.next()? {
             cancel.check()?;
             checked += 1;

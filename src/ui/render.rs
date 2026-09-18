@@ -181,7 +181,14 @@ impl App {
             label("  →  ", p.accent),
             label(stamp(view.before, "Latest"), p.text),
             label(format!("   {}   ", self.session.timezone), p.teal),
-            label(format!("{}   ", macb(view.time_mask)), p.muted),
+            label(
+                format!(
+                    "{}{}   ",
+                    if view.time_exact { "=" } else { "" },
+                    macb(view.time_mask)
+                ),
+                p.muted,
+            ),
             label("F4 edit", p.subtle),
         ]);
         let hosts = if view.predicate.hosts.is_empty() {

@@ -49,7 +49,8 @@ fn scan(
         "SELECT e.epoch,e.record,r.path,r.host,r.tag
          FROM events e CROSS JOIN records r ON r.id=e.record
          WHERE (e.epoch,e.record)>=(?,?)
-         AND (e.epoch,e.record)<=(?,?) AND (e.macb & ?) != 0
+         AND (e.epoch,e.record)<=(?,?) AND (e.macb & ?5) != 0
+         AND (?6 = 0 OR e.macb = ?5)
          ORDER BY e.epoch,e.record",
     )?;
     let mut rows = stmt.query(params![
@@ -57,7 +58,8 @@ fn scan(
         anchor.record,
         end,
         i64::MAX,
-        view.time_mask
+        view.time_mask,
+        view.time_exact,
     ])?;
     let mut counts = Counts {
         label: label.into(),
@@ -113,8 +115,9 @@ pub fn run(store: &Store, session: &Session) -> Result<()> {
         .progress_handler(10_000, Some(move || started.elapsed().as_secs() >= 180))?;
     eprintln!("Counting time-eligible events in the saved view...");
     let total: i64 = store.conn.query_row(
-        "SELECT COUNT(*) FROM events WHERE epoch>=? AND epoch<=? AND (macb & ?) != 0",
-        params![begin, end, view.time_mask],
+        "SELECT COUNT(*) FROM events WHERE epoch>=? AND epoch<=? AND (macb & ?3) != 0
+         AND (?4 = 0 OR macb = ?3)",
+        params![begin, end, view.time_mask, view.time_exact],
         |row| row.get(0),
     )?;
     ensure!(
@@ -147,9 +150,10 @@ pub fn run(store: &Store, session: &Session) -> Result<()> {
         let offset = total * (2 * bucket + 1) / 20;
         let anchor = store.conn.query_row(
             "SELECT epoch,record FROM events
-             WHERE epoch>=? AND epoch<=? AND (macb & ?) != 0
+             WHERE epoch>=? AND epoch<=? AND (macb & ?3) != 0
+             AND (?4 = 0 OR macb = ?3)
              ORDER BY epoch,record LIMIT 1 OFFSET ?",
-            params![begin, end, view.time_mask, offset],
+            params![begin, end, view.time_mask, view.time_exact, offset],
             |row| {
                 Ok(EventKey {
                     epoch: row.get(0)?,

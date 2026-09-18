@@ -58,6 +58,9 @@ pub struct View {
     pub after: Option<i64>,
     pub before: Option<i64>,
     pub time_mask: u8,
+    /// Match the complete event mask instead of any selected timestamp type.
+    #[serde(default)]
+    pub time_exact: bool,
     pub bogus: bool,
     pub top: Option<EventKey>,
     pub selected: usize,
@@ -74,6 +77,7 @@ impl Default for View {
             after: None,
             before: None,
             time_mask: 15,
+            time_exact: false,
             bogus: false,
             top: None,
             selected: 0,

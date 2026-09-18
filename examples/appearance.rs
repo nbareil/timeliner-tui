@@ -182,6 +182,15 @@ fn main() {
         Some("filters") => {
             app.key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE));
         }
+        Some("access-only") => {
+            app.session.views[0].time_mask = 2;
+            app.session.views[0].time_exact = true;
+            app.session.views[0].selected = 0;
+            app.rows.retain(|row| row.event().unwrap().macb == 2);
+            app.key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE));
+            app.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+            app.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        }
         Some("directory") => {
             app.key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::SHIFT));
         }

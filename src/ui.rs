@@ -104,6 +104,7 @@ Collapsed groups are saved per tab and restored after restarting.
 Filters and IOC rule reloads reset folds. Bookmark jumps reveal members.
 Export includes folded records.
 / opens the path filter editor. Exclusions are regular expressions.
+Timestamp types: a includes any access event; =a shows only .a..; mcb hides .a..
 Filters use Rust regex syntax (no lookaround/backreferences).
 F2 → a restores automatic IOC assessment, including a cleared tag.
 Automatic IOC matches have amber paths; the right column is the assessment.
@@ -910,6 +911,7 @@ impl App {
                         || view.after != self.view().after
                         || view.before != self.view().before
                         || view.time_mask != self.view().time_mask
+                        || view.time_exact != self.view().time_exact
                         || view.bogus != self.view().bogus
                 }) {
                     self.selected_records.clear();
@@ -1254,8 +1256,12 @@ impl App {
                         view.predicate.hosts.join(","),
                     ),
                     (
-                        "Timestamp types (macb)",
-                        macb(view.time_mask).replace('.', ""),
+                        "Timestamp types (macb; =a: access only; mcb: hide access only)",
+                        format!(
+                            "{}{}",
+                            if view.time_exact { "=" } else { "" },
+                            macb(view.time_mask).replace('.', "")
+                        ),
                     ),
                     (
                         "Include nonpositive timestamps (yes/no)",
@@ -1342,13 +1348,17 @@ impl App {
                     .map(str::to_owned)
                     .collect();
                 view.time_mask = 0;
-                for c in value(2).chars() {
+                let types = value(2);
+                view.time_exact = types.starts_with('=');
+                for c in types.strip_prefix('=').unwrap_or(types).chars() {
                     view.time_mask |= match c {
                         'm' => 1,
                         'a' => 2,
                         'c' => 4,
                         'b' => 8,
-                        _ => bail!("Timestamp types must use m, a, c, b"),
+                        _ => bail!(
+                            "Timestamp types must use m, a, c, b; prefix = for an exact match"
+                        ),
                     };
                 }
                 view.bogus = match value(3) {

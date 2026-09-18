@@ -867,6 +867,67 @@ fn directory_editor_shows_the_end_of_long_paths() {
 }
 
 #[test]
+fn timestamp_form_supports_exact_access_and_preserves_it_when_reopened_or_forked() {
+    for (text, mask, exact) in [
+        ("=a", 2, true),
+        ("a", 2, false),
+        ("mcb", 13, false),
+        ("=ma", 3, true),
+    ] {
+        let mut app = app();
+        app.session.views[0].time_mask = 2;
+        app.session.views[0].time_exact = true;
+        key(&mut app, KeyCode::F(5));
+        key(&mut app, KeyCode::Tab);
+        key(&mut app, KeyCode::Tab);
+        app.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        for c in text.chars() {
+            key(&mut app, KeyCode::Char(c));
+        }
+        let actions = key(&mut app, KeyCode::Enter);
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Expected a timestamp filter query");
+        };
+        assert_eq!(request.view.time_mask, mask);
+        assert_eq!(request.view.time_exact, exact);
+        app.message(timeliner_tui::worker::Message::Page(
+            request.generation,
+            app.rows.clone(),
+        ));
+        key(&mut app, KeyCode::F(5));
+        let actions = key(&mut app, KeyCode::Enter);
+        let [Action::Page(request)] = actions.as_slice() else {
+            panic!("Expected the reopened filter to remain valid");
+        };
+        assert_eq!(request.view.time_mask, mask);
+        assert_eq!(request.view.time_exact, exact);
+        app.message(timeliner_tui::worker::Message::Page(
+            request.generation,
+            app.rows.clone(),
+        ));
+        key(&mut app, KeyCode::F(6));
+        assert_eq!(app.session.views[app.session.active].time_exact, exact);
+    }
+}
+
+#[test]
+fn invalid_exact_timestamp_filters_leave_the_working_view_intact() {
+    for text in ["=", "=x", "==a", "a=m"] {
+        let mut app = app();
+        key(&mut app, KeyCode::F(5));
+        key(&mut app, KeyCode::Tab);
+        key(&mut app, KeyCode::Tab);
+        app.key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        for c in text.chars() {
+            key(&mut app, KeyCode::Char(c));
+        }
+        assert!(key(&mut app, KeyCode::Enter).is_empty());
+        assert_eq!(app.session.views[0].time_mask, 15);
+        assert!(!app.session.views[0].time_exact);
+    }
+}
+
+#[test]
 fn filter_form_removes_individual_exclusions_and_focuses_new_ones() {
     let mut app = app();
     app.top = 20;
