@@ -12,25 +12,25 @@ identity, including duplicates on the same host or across different hosts.
 
 ```sh
 # One bodyfile
-nix run path:. -- timeline.body
+nix run github:nbareil/timeliner-tui -- timeline.body
 
 # Multiple extracted UAC directories or bodyfiles
-nix run path:. -- /cases/server-a /cases/server-b/bodyfile/bodyfile.txt
+nix run github:nbareil/timeliner-tui -- /cases/server-a /cases/server-b/bodyfile/bodyfile.txt
 
 # Put the index on a disk with sufficient free space
-nix run path:. -- --workspace /analysis/case-one \
+nix run github:nbareil/timeliner-tui -- --workspace /analysis/case-one \
   --ioc-file ~/ioc.filenames.yaml /cases/server-a /cases/server-b
 
 # Resume an investigation without supplying its sources again
-nix run path:. -- --workspace /analysis/case-one
+nix run github:nbareil/timeliner-tui -- --workspace /analysis/case-one
 
 # Build the index without opening a terminal interface
-nix run path:. -- --index-only --workspace /analysis/case-one timeline.body
+nix run github:nbareil/timeliner-tui -- --index-only --workspace /analysis/case-one timeline.body
 ```
 
-`path:.` also works before new files have been added to Git. After committing the
-project, `nix run .` works too. Flake outputs support `x86_64-linux` and
-`aarch64-linux`; each platform needs a compatible builder.
+To run a local checkout instead, replace `github:nbareil/timeliner-tui` with
+`path:.`, which also includes files not yet added to Git. Flake outputs support
+`x86_64-linux` and `aarch64-linux`; each platform needs a compatible builder.
 
 The initial import indexes the complete input and displays progress. Reopening
 reuses that index. Source bodyfiles remain external and read-only: the workspace
@@ -367,7 +367,7 @@ values share one column. The original bodyfile line remains available below the
 formatted details.
 
 ```sh
-nix run path:. -- --after 2026-09-01 --before 2026-09-03 \
+nix run github:nbareil/timeliner-tui -- --after 2026-09-01 --before 2026-09-03 \
   --tz UTC timeline.body
 ```
 
@@ -439,10 +439,10 @@ See the [UAC Details terminal capture](docs/images/uac-details.txt).
 
 ```sh
 # Repeat --host for explicit input-specific labels
-nix run path:. -- --host /cases/server-a web-01 /cases/server-a
+nix run github:nbareil/timeliner-tui -- --host /cases/server-a web-01 /cases/server-a
 
 # Legacy bodyfiles with hostnames stored in their first field
-nix run path:. -- --host-from-md5 combined.body
+nix run github:nbareil/timeliner-tui -- --host-from-md5 combined.body
 ```
 
 An explicit host override takes precedence over legacy mode. Legacy mode falls
@@ -499,10 +499,10 @@ prevents export of its records.
 
 ```sh
 # Find source IDs and malformed-record locations
-nix run path:. -- --workspace /analysis/case-one --diagnostics
+nix run github:nbareil/timeliner-tui -- --workspace /analysis/case-one --diagnostics
 
 # Relink a moved source, requiring the same complete-file SHA-256
-nix run path:. -- --workspace /analysis/case-one \
+nix run github:nbareil/timeliner-tui -- --workspace /analysis/case-one \
   --relink 1 /new/location/bodyfile.txt
 ```
 
