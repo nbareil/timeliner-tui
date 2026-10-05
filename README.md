@@ -8,6 +8,13 @@ This is a separate Rust application. It carries over Timeliner's UTC time
 semantics, MACB grouping, and escaped-field handling. Records retain their source
 identity, including duplicates on the same host or across different hosts.
 
+## Demo
+
+A three-minute tour of the main features, recorded from the actual UI with
+synthetic data:
+
+https://github.com/user-attachments/assets/8ce13181-ee55-4502-8476-79079f836e0a
+
 ## Run with Nix
 
 ```sh
